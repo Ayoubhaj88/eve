@@ -4,9 +4,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 
 import DashboardScreen from '../screens/DashboardScreen';
-import AlertsScreen from '../screens/AlertsScreen';
-import PredictionScreen from '../screens/PredictionScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+import AlertsScreen from '../screens/Alertsscreen';
+import PredictionScreen from '../screens/Predictionscreen';
+import SettingsScreen from '../screens/Settingsscreen';
 
 const Tab = createBottomTabNavigator();
 
