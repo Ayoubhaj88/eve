@@ -3,7 +3,7 @@ import {
   View, Text, Image, ScrollView, TouchableOpacity,
   RefreshControl, StyleSheet, StatusBar, Platform,
 } from 'react-native';
-
+import { useRoute } from '@react-navigation/native';
 // ─── Design Tokens ────────────────────────────────────────
 const C = {
   bg:           '#0A0A0F',

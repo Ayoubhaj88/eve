@@ -4,8 +4,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 
 import DashboardScreen from '../screens/DashboardScreen';
-import AlertsScreen from '../screens/Alertsscreen';
-import PredictionScreen from '../screens/Predictionscreen';
+import HomeScreen from '../screens/HomeScreen';
+import DashboardScreen from '../screens/DashboardScreen';
 import SettingsScreen from '../screens/Settingsscreen';
 
 const Tab = createBottomTabNavigator();

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import SplashScreen from './src/screens/SplashScreen';
-import AppNavigator from './src/navigation/AppNavigator';
+import AppNavigator from './src/navigation/Appnavigator';
 
 export default function App() {
     const [ready, setReady] = useState(false);
