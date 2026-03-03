@@ -1,14 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text } from 'react-native';
-import SplashScreen from './src/screens/SplashScreen';
+import React from 'react';
 import AppNavigator from './src/navigation/Appnavigator';
 
 export default function App() {
-  const [ready, setReady] = useState(false);
-
-  if (!ready) {
-    return <SplashScreen onFinish={() => setReady(true)} />;
-  }
-
   return <AppNavigator />;
 }

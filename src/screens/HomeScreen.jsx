@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, StatusBar, Platform, ScrollView,
+  StatusBar, Platform, ActivityIndicator, ScrollView,
+  Modal, TextInput, KeyboardAvoidingView, Alert,
 } from 'react-native';
+import { supabase } from '../lib/supabaseClient';
 
 const C = {
   bg:           '#0A0A0F',
@@ -34,49 +36,194 @@ function battColor(v) {
   return C.danger;
 }
 
-const SCOOTERS = [
-  {
-    id: '1', name: 'Scooter 1', model: 'Niu NQi GT Pro',
-    status: 'online', battery: 78, charging: false,
-    speed: 0, range: 62, temp: 24,
-    alarm: false, starter: true, trips: 142, totalKm: 2340,
-    gps: { address: 'Sidi Henri, Tunis', lastUpdate: 'il y a 2 min' },
-  },
-  {
-    id: '2', name: 'Scooter 2', model: 'Niu MQi+ Sport',
-    status: 'charging', battery: 34, charging: true,
-    speed: 0, range: 28, temp: 31,
-    alarm: true, starter: false, trips: 89, totalKm: 1120,
-    gps: { address: 'La Marsa, Tunis', lastUpdate: 'il y a 5 min' },
-  },
-  {
-    id: '3', name: 'Scooter 3', model: 'Vmoto Super Soco',
-    status: 'offline', battery: null, charging: false,
-    speed: null, range: null, temp: null,
-    alarm: false, starter: false, trips: 211, totalKm: 4780,
-    gps: { address: null, lastUpdate: null },
-  },
-];
+function timeAgo(dateStr) {
+  if (!dateStr) return null;
+  const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (diff < 60)   return `il y a ${diff}s`;
+  if (diff < 3600) return `il y a ${Math.floor(diff/60)}min`;
+  return `il y a ${Math.floor(diff/3600)}h`;
+}
 
-// ── Detail Screen ─────────────────────────────────────────
+// ─── Modal Ajout Scooter ───────────────────────────────────
+function AddScooterModal({ visible, onClose, onAdded }) {
+  const [name,    setName]    = useState('');
+  const [model,   setModel]   = useState('');
+  const [reference, setReference] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const reset = () => { setName(''); setModel(''); setReference(''); };
+
+  const handleAdd = async () => {
+  if (!name.trim()) {
+    Alert.alert('Erreur', 'Le nom est obligatoire.');
+    return;
+  }
+  setLoading(true);
+  try {
+    const { data: scooter, error: err1 } = await supabase
+      .from('scooters')
+      .insert({ name: name.trim(), model: model.trim(), reference: reference.trim() })
+      .select()
+      .single();
+    if (err1) throw err1;
+    reset();
+    onAdded();
+    onClose();
+  } catch (err) {
+    Alert.alert('Erreur', err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View style={{
+          backgroundColor: C.bgCard,
+          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+          borderTopWidth: 1, borderColor: C.border,
+        }}>
+          {/* Handle */}
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 24 }} />
+
+          {/* Titre */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: C.white, letterSpacing: -0.5 }}>
+              Nouveau 🛵
+            </Text>
+            <TouchableOpacity onPress={onClose}
+              style={{ backgroundColor: C.bgElevated, borderRadius: 20, width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ color: C.textMuted, fontSize: 16 }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Champ Nom */}
+          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+            Nom *
+          </Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="ex: Scooter 1"
+            placeholderTextColor={C.textMuted}
+            style={{
+              backgroundColor: C.bgElevated, borderRadius: 14, padding: 14,
+              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border,
+              marginBottom: 16,
+            }}
+          />
+
+          {/* Champ Modèle */}
+          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+            Modèle
+          </Text>
+          <TextInput
+            value={model}
+            onChangeText={setModel}
+            placeholder="ex: Niu NQi GT Pro"
+            placeholderTextColor={C.textMuted}
+            style={{
+              backgroundColor: C.bgElevated, borderRadius: 14, padding: 14,
+              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border,
+              marginBottom: 16,
+            }}
+          />
+
+          {/* Champ Batterie */}
+          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+            Référence
+          </Text>
+          <TextInput
+            value={reference}
+            onChangeText={setReference}
+            placeholder="ex: SCT-001"
+            placeholderTextColor={C.textMuted}
+            style={{
+              backgroundColor: C.bgElevated, borderRadius: 14, padding: 14,
+              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border,
+              marginBottom: 28,
+            }}
+          />
+
+          {/* Bouton Ajouter */}
+          <TouchableOpacity
+            onPress={handleAdd}
+            disabled={loading}
+            activeOpacity={0.8}
+            style={{
+              backgroundColor: C.accent, borderRadius: 16, padding: 16,
+              alignItems: 'center',
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            {loading
+              ? <ActivityIndicator color={C.bg} />
+              : <Text style={{ fontSize: 15, fontWeight: '900', color: C.bg, letterSpacing: -0.3 }}>
+                  Ajouter le scooter
+                </Text>
+            }
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─── Écran Détail ──────────────────────────────────────────
 function DetailScreen({ s, onBack }) {
+  const [data,    setData]    = useState(s);
   const [alarm,   setAlarm]   = useState(s.alarm);
   const [starter, setStarter] = useState(s.starter);
-  const sc = STATUS[s.status];
+  const sc = STATUS[data.status] ?? STATUS.offline;
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`telemetry-${s.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'telemetry',
+        filter: `scooter_id=eq.${s.id}`,
+      }, payload => setData(prev => ({ ...prev, ...payload.new })))
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [s.id]);
+
+  const handleAlarm = async () => {
+    const v = !alarm; setAlarm(v);
+    await supabase.from('telemetry').insert({
+      scooter_id: s.id, alarm: v, starter,
+      battery: data.battery, status: data.status,
+    });
+  };
+
+  const handleStarter = async () => {
+    const v = !starter; setStarter(v);
+    await supabase.from('telemetry').insert({
+      scooter_id: s.id, starter: v, alarm,
+      battery: data.battery, status: data.status,
+    });
+  };
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }}
       contentContainerStyle={{ padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Retour */}
       <TouchableOpacity onPress={onBack}
         style={{ alignSelf: 'flex-start', backgroundColor: C.bgElevated, borderRadius: 10,
           paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border, marginBottom: 20 }}>
         <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSecondary }}>← Retour</Text>
       </TouchableOpacity>
 
-      {/* Hero */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
@@ -85,19 +232,18 @@ function DetailScreen({ s, onBack }) {
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
             <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>{sc.label}</Text>
           </View>
-          <Text style={{ fontSize: 28, fontWeight: '900', color: C.white, letterSpacing: -1 }}>{s.name}</Text>
-          <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.model}</Text>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: C.white, letterSpacing: -1 }}>{data.name}</Text>
+          <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{data.model}</Text>
         </View>
         <Text style={{ fontSize: 48 }}>🛵</Text>
       </View>
 
-      {/* Mini stats */}
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
         {[
-          { label: 'Batterie',  value: s.battery != null ? `${s.battery}%` : '—', color: battColor(s.battery) },
-          { label: 'Autonomie', value: s.range   != null ? `${s.range}km`  : '—', color: C.white },
-          { label: 'Trajets',   value: `${s.trips}`,                               color: C.white },
-          { label: 'Total',     value: `${(s.totalKm/1000).toFixed(1)}k`,          color: C.white },
+          { label: 'Batterie',  value: data.battery != null ? `${data.battery}%` : '—', color: battColor(data.battery) },
+          { label: 'Autonomie', value: data.range   != null ? `${data.range}km`  : '—', color: C.white },
+          { label: 'Vitesse',   value: data.speed   != null ? `${data.speed}km/h`: '—', color: C.white },
+          { label: 'Temp',      value: data.temp    != null ? `${data.temp}°C`   : '—', color: C.white },
         ].map(({ label, value, color }) => (
           <View key={label} style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: '800', color, letterSpacing: -0.5 }}>{value}</Text>
@@ -106,11 +252,10 @@ function DetailScreen({ s, onBack }) {
         ))}
       </View>
 
-      {/* GPS */}
       <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Localisation</Text>
       <View style={{ backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.border, marginBottom: 20 }}>
         <View style={{ height: 150, backgroundColor: '#13131A', justifyContent: 'center', alignItems: 'center' }}>
-          {s.status !== 'offline' ? (
+          {data.status !== 'offline' ? (
             <>
               <View style={{ position: 'absolute', width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(0,229,255,0.05)', borderWidth: 1, borderColor: 'rgba(0,229,255,0.1)' }} />
               <View style={{ position: 'absolute', width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(0,229,255,0.08)', borderWidth: 1.5, borderColor: C.borderAccent }} />
@@ -121,26 +266,25 @@ function DetailScreen({ s, onBack }) {
           ) : (
             <Text style={{ color: C.textMuted, fontSize: 12 }}>Hors ligne — GPS non disponible</Text>
           )}
-          {s.gps.address ? (
+          {data.address ? (
             <View style={{ position: 'absolute', bottom: 10, left: 10, backgroundColor: C.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: C.bg }}>📍 {s.gps.address}</Text>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: C.bg }}>📍 {data.address}</Text>
             </View>
           ) : null}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 8 }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: s.status !== 'offline' ? C.success : C.textMuted }} />
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: data.status !== 'offline' ? C.success : C.textMuted }} />
           <Text style={{ flex: 1, fontSize: 11, color: C.textSecondary }}>
-            {s.gps.lastUpdate ? `Mis à jour ${s.gps.lastUpdate}` : 'En attente du GPS…'}
+            {data.last_update ? `Mis à jour ${timeAgo(data.last_update)}` : 'En attente du GPS…'}
           </Text>
         </View>
       </View>
 
-      {/* Contrôles */}
       <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Contrôles</Text>
       <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
         {[
-          { icon: '🔒', label: 'Alarme',    active: alarm,   onPress: () => setAlarm(v => !v),   statusOn: 'Armée',  statusOff: 'Désarmée' },
-          { icon: '⚡', label: 'Démarrage', active: starter, onPress: () => setStarter(v => !v), statusOn: 'Actif',  statusOff: 'Inactif'  },
+          { icon: '🔒', label: 'Alarme',    active: alarm,   onPress: handleAlarm,   statusOn: 'Armée',  statusOff: 'Désarmée' },
+          { icon: '⚡', label: 'Démarrage', active: starter, onPress: handleStarter, statusOn: 'Actif',  statusOff: 'Inactif'  },
         ].map(({ icon, label, active, onPress, statusOn, statusOff }) => (
           <TouchableOpacity key={label} onPress={onPress} activeOpacity={0.75}
             style={{ flex: 1, backgroundColor: active ? '#1A1A26' : C.bgCard, borderRadius: 18, padding: 16,
@@ -155,14 +299,13 @@ function DetailScreen({ s, onBack }) {
         ))}
       </View>
 
-      {/* Stats */}
       <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Stats en direct</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {[
-          { icon: '🔋', value: s.battery, unit: '%',    label: 'BATTERIE' },
-          { icon: '🚀', value: s.speed,   unit: 'km/h', label: 'VITESSE' },
-          { icon: '🛣️', value: s.range,   unit: 'km',   label: 'AUTONOMIE' },
-          { icon: '🌡️', value: s.temp,    unit: '°C',   label: 'TEMPÉRATURE' },
+          { icon: '🔋', value: data.battery, unit: '%',    label: 'BATTERIE' },
+          { icon: '🚀', value: data.speed,   unit: 'km/h', label: 'VITESSE' },
+          { icon: '🛣️', value: data.range,   unit: 'km',   label: 'AUTONOMIE' },
+          { icon: '🌡️', value: data.temp,    unit: '°C',   label: 'TEMPÉRATURE' },
         ].map(({ icon, value, unit, label }) => (
           <View key={label} style={{ width: '47.5%', backgroundColor: C.bgCard, borderRadius: 16, padding: 14,
             borderWidth: 1, borderColor: C.border, minHeight: 110, justifyContent: 'space-between' }}>
@@ -174,108 +317,154 @@ function DetailScreen({ s, onBack }) {
           </View>
         ))}
       </View>
-
       <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
-// ── Home Screen ───────────────────────────────────────────
+// ─── Écran Accueil ─────────────────────────────────────────
 export default function HomeScreen() {
-  const [selected, setSelected] = useState(null);
+  const [scooters,  setScooters]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [selected,  setSelected]  = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+  const fetchScooters = async () => {
+    const { data, error } = await supabase.from('scooters_live').select('*');
+    if (error) console.error('Supabase error:', error);
+    else setScooters(data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchScooters();
+    const channel = supabase
+      .channel('telemetry-all')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' },
+        () => fetchScooters())
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, []);
 
   if (selected) return <DetailScreen s={selected} onBack={() => setSelected(null)} />;
 
-  const online   = SCOOTERS.filter(s => s.status !== 'offline').length;
-  const charging = SCOOTERS.filter(s => s.status === 'charging').length;
-  const totalKm  = SCOOTERS.reduce((a, s) => a + s.totalKm, 0);
+  const online   = scooters.filter(s => s.status !== 'offline').length;
+  const charging = scooters.filter(s => s.status === 'charging').length;
+  const totalKm  = scooters.reduce((a, s) => a + (s.range ?? 0), 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      <FlatList
-        data={SCOOTERS}
-        keyExtractor={i => i.id}
-        contentContainerStyle={{ padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={() => (
-          <>
-            <Text style={{ fontSize: 10, letterSpacing: 3, color: C.accent, textTransform: 'uppercase', marginBottom: 8 }}>
-              Tableau de bord
-            </Text>
-            <Text style={{ fontSize: 36, fontWeight: '900', color: C.white, letterSpacing: -1 }}>
-              Ma <Text style={{ color: C.accent }}>Flotte</Text>
-            </Text>
-            <Text style={{ fontSize: 12, color: C.textSecondary, marginTop: 6, marginBottom: 24 }}>
-              {SCOOTERS.length} appareils enregistrés
-            </Text>
 
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
-              {[
-                { value: online,   color: C.success, label: 'En ligne' },
-                { value: charging, color: C.warning, label: 'En charge' },
-                { value: `${(totalKm/1000).toFixed(1)}k`, color: C.white, label: 'Total km' },
-              ].map(({ value, color, label }) => (
-                <View key={label} style={{ flex: 1, backgroundColor: C.bgCard, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
-                  <Text style={{ fontSize: 22, fontWeight: '900', color, letterSpacing: -1 }}>{value}</Text>
-                  <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginTop: 4 }}>{label}</Text>
-                </View>
-              ))}
-            </View>
-
-            <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 14 }}>
-              Appareils
-            </Text>
-          </>
-        )}
-        renderItem={({ item }) => {
-          const sc = STATUS[item.status];
-          return (
-            <TouchableOpacity
-              onPress={() => setSelected(item)}
-              activeOpacity={0.75}
-              style={{ backgroundColor: C.bgCard, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border }}
-            >
-              {/* Top */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={C.accent} />
+          <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 12 }}>Connexion…</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={scooters}
+          keyExtractor={i => i.id}
+          contentContainerStyle={{ padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={() => (
+            <>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
                 <View>
-                  <Text style={{ fontSize: 18, fontWeight: '700', color: C.white }}>{item.name}</Text>
-                  <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{item.model}</Text>
+              
+                  
+                  <Text style={{ fontSize: 12, color: C.textSecondary, marginTop: 6 }}>
+                    {scooters.length} appareil{scooters.length > 1 ? 's' : ''}
+                  </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5,
-                  borderRadius: 20, borderWidth: 1, borderColor: sc.color + '44', backgroundColor: sc.bg }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>{sc.label}</Text>
-                </View>
+
+                {/* Bouton + */}
+                <TouchableOpacity
+                  onPress={() => setShowModal(true)}
+                  activeOpacity={0.8}
+                  style={{
+                    width: 48, height: 48, borderRadius: 16,
+                    backgroundColor: C.accent,
+                    justifyContent: 'center', alignItems: 'center',
+                    shadowColor: C.accent, shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.4, shadowRadius: 10, elevation: 8,
+                  }}
+                >
+                  <Text style={{ fontSize: 26, color: C.bg, fontWeight: '300', lineHeight: 30 }}>+</Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Metrics */}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: battColor(item.battery) }}>
-                    {item.battery != null ? `${item.battery}%` : '—'}
-                  </Text>
-                  <Text style={{ fontSize: 8, color: C.textMuted, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 3 }}>Batterie</Text>
-                  <View style={{ width: '100%', height: 3, backgroundColor: C.border, borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
-                    <View style={{ height: '100%', borderRadius: 2, width: `${item.battery ?? 0}%`, backgroundColor: battColor(item.battery) }} />
+              {/* Summary */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
+                {[
+                  { value: online,   color: C.success, label: 'En ligne' },
+                  { value: charging, color: C.warning, label: 'En charge' },
+                  { value: `${totalKm.toFixed(0)}km`, color: C.white, label: 'Autonomie' },
+                ].map(({ value, color, label }) => (
+                  <View key={label} style={{ flex: 1, backgroundColor: C.bgCard, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+                    <Text style={{ fontSize: 22, fontWeight: '900', color, letterSpacing: -1 }}>{value}</Text>
+                    <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginTop: 4 }}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 14 }}>
+                Appareils
+              </Text>
+            </>
+          )}
+          renderItem={({ item }) => {
+            const sc = STATUS[item.status] ?? STATUS.offline;
+            return (
+              <TouchableOpacity onPress={() => setSelected(item)} activeOpacity={0.75}
+                style={{ backgroundColor: C.bgCard, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <View>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: C.white }}>{item.name}</Text>
+                    <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{item.model}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5,
+                    borderRadius: 20, borderWidth: 1, borderColor: sc.color + '44', backgroundColor: sc.bg }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>{sc.label}</Text>
                   </View>
                 </View>
-                <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: C.white }}>{item.range ?? '—'}</Text>
-                  <Text style={{ fontSize: 8, color: C.textMuted, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 3 }}>km restants</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: battColor(item.battery) }}>
+                      {item.battery != null ? `${item.battery}%` : '—'}
+                    </Text>
+                    <Text style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', marginTop: 3 }}>Batterie</Text>
+                    <View style={{ width: '100%', height: 3, backgroundColor: C.border, borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', borderRadius: 2, width: `${item.battery ?? 0}%`, backgroundColor: battColor(item.battery) }} />
+                    </View>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: C.white }}>{item.range ?? '—'}</Text>
+                    <Text style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', marginTop: 3 }}>km restants</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: C.white }}>{item.speed ?? '—'}</Text>
+                    <Text style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', marginTop: 3 }}>km/h</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: C.white }}>{item.trips}</Text>
-                  <Text style={{ fontSize: 8, color: C.textMuted, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 3 }}>Trajets</Text>
-                </View>
-              </View>
+                <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 12 }}>
+                  {item.last_update ? `Mis à jour ${timeAgo(item.last_update)}` : 'Aucune donnée'} →
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ListFooterComponent={() => <View style={{ height: 40 }} />}
+        />
+      )}
 
-              <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 12 }}>voir détails →</Text>
-            </TouchableOpacity>
-          );
-        }}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-        ListFooterComponent={() => <View style={{ height: 40 }} />}
+      {/* Modal Ajout */}
+      <AddScooterModal
+        visible={showModal}
+        onClose={() => setShowModal(false)}
+        onAdded={fetchScooters}
       />
     </View>
   );
