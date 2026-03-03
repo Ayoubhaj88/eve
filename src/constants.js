@@ -1,72 +1,61 @@
-// ─── Color Palette ───────────────────────────────────────
-// Deep navy dark theme — electric cyan accent
-// Inspiré du design des apps de mobilité premium (Tesla, Lime, Bird)
-export const COLORS = {
-    // Backgrounds — dégradé de profondeur cohérent
-    bg:          '#080c14',   // noir bleu très profond
-    bgCard:      '#0f1521',   // carte principale
-    bgCardLight: '#151d2e',   // carte secondaire / survol
-    bgElevated:  '#1c2540',   // éléments élevés (toggles, tracks)
-
-    // Accent — cyan électrique Eve Mobility
-    accent:      '#00A8E8',
-    accentDim:   'rgba(0, 200, 240, 0.12)',
-    accentGlow:  'rgba(0, 200, 240, 0.22)',
-
-    // Text — hiérarchie claire sur fond sombre
-    white:         '#ffffff',
-    textPrimary:   '#dde4f0',   // texte principal
-    textSecondary: '#6b7a9e',   // texte secondaire
-    textMuted:     '#3d4d6b',   // texte discret
-
-    // Status
-    success:    '#05d87e',
-    successDim: 'rgba(5, 216, 126, 0.12)',
-    warning:    '#f5a623',
-    warningDim: 'rgba(245, 166, 35, 0.12)',
-    danger:     '#f04e4e',
-    dangerDim:  'rgba(240, 78, 78, 0.12)',
-
-    // Borders — subtils sur fond sombre
-    border:       'rgba(100, 120, 170, 0.10)',
-    borderAccent: 'rgba(0, 200, 240, 0.28)',
+// ─── Colors ───────────────────────────────────────────────
+export const C = {
+  bg:           '#0A0A0F',
+  bgCard:       '#13131A',
+  bgElevated:   '#1E1E2E',
+  accent:       '#00E5FF',
+  accentGlow:   'rgba(0,229,255,0.10)',
+  success:      '#00E676',
+  successDim:   'rgba(0,230,118,0.12)',
+  warning:      '#FFB300',
+  warningDim:   'rgba(255,179,0,0.12)',
+  danger:       '#FF1744',
+  white:        '#FFFFFF',
+  textSecondary:'#8A8A9A',
+  textMuted:    '#4A4A5A',
+  border:       '#1E1E2E',
+  borderAccent: 'rgba(0,229,255,0.25)',
 };
 
-// ─── Typography ──────────────────────────────────────────
-export const FONTS = {
-    size: {
-        xs:   11,
-        sm:   13,
-        md:   15,
-        lg:   17,
-        xl:   22,
-        xxl:  32,
-        hero: 44,
-    },
-    weight: {
-        regular:  '400',
-        medium:   '500',
-        semibold: '600',
-        bold:     '700',
-        black:    '800',
-    },
+// ─── Status config ─────────────────────────────────────────
+export const STATUS = {
+  online:   { color: C.success,  bg: C.successDim, label: 'En ligne'   },
+  offline:  { color: C.textMuted, bg: 'transparent', label: 'Hors ligne' },
+  charging: { color: C.warning,  bg: C.warningDim, label: 'En charge'  },
 };
 
-// ─── Spacing ─────────────────────────────────────────────
-export const SPACING = {
-    xs:   4,
-    sm:   8,
-    md:   12,
-    lg:   16,
-    xl:   20,
-    xxl:  24,
-    xxxl: 32,
-};
+// ─── Battery color helper ──────────────────────────────────
+export function battColor(v) {
+  if (v == null) return C.textMuted;
+  if (v > 50)   return C.success;
+  if (v > 20)   return C.warning;
+  return C.danger;
+}
 
-// ─── User Profile ────────────────────────────────────────
-// TODO: remplacer par Firebase Auth + Firestore
-export const USER_PROFILE = {
-    name:         'Ayoub',
-    email:        'ayoub@example.com',
-    scooterModel: 'X-Ride Pro 5000',
-};
+// ─── Mock scooters (remplace par ton API/MQTT) ─────────────
+export const SCOOTERS = [
+  {
+    id: '1', name: 'Scooter 1', model: 'Niu NQi GT Pro',
+    status: 'online', battery: 78, charging: false,
+    speed: 0, range: 62, temp: 24,
+    alarm: false, starter: true,
+    trips: 142, totalKm: 2340,
+    gps: { address: 'Sidi Henri, Tunis', lastUpdate: 'il y a 2 min' },
+  },
+  {
+    id: '2', name: 'Scooter 2', model: 'Niu MQi+ Sport',
+    status: 'charging', battery: 34, charging: true,
+    speed: 0, range: 28, temp: 31,
+    alarm: true, starter: false,
+    trips: 89, totalKm: 1120,
+    gps: { address: 'La Marsa, Tunis', lastUpdate: 'il y a 5 min' },
+  },
+  {
+    id: '3', name: 'Scooter 3', model: 'Vmoto Super Soco',
+    status: 'offline', battery: null, charging: false,
+    speed: null, range: null, temp: null,
+    alarm: false, starter: false,
+    trips: 211, totalKm: 4780,
+    gps: { address: null, lastUpdate: null },
+  },
+];

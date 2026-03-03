@@ -1,30 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, Image, ScrollView, TouchableOpacity,
-  RefreshControl, StyleSheet, StatusBar, Platform,
+  View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, StatusBar, Platform,
 } from 'react-native';
-import { useRoute } from '@react-navigation/native';
-// ─── Design Tokens ────────────────────────────────────────
-const C = {
-  bg:           '#0A0A0F',
-  bgCard:       '#13131A',
-  bgCardLight:  '#1A1A26',
-  bgElevated:   '#1E1E2E',
-  accent:       '#00E5FF',
-  accentGlow:   'rgba(0,229,255,0.10)',
-  success:      '#00E676',
-  successDim:   'rgba(0,230,118,0.12)',
-  warning:      '#FFB300',
-  danger:       '#FF1744',
-  white:        '#FFFFFF',
-  textPrimary:  '#FFFFFF',
-  textSecondary:'#8A8A9A',
-  textMuted:    '#4A4A5A',
-  border:       '#1E1E2E',
-  borderAccent: 'rgba(0,229,255,0.25)',
-};
-const F = { xs: 11, sm: 12, md: 14, lg: 16, xl: 20, xxl: 38 };
-const S = { xs: 4, sm: 6, md: 10, lg: 16, xl: 20, xxl: 28 };
+import { C, STATUS, battColor } from '../constants';
 
 // ─── Sub-components ───────────────────────────────────────
 
@@ -39,7 +18,7 @@ function StatCard({ icon, value, unit, label, badge, badgeColor }) {
           </View>
         )}
       </View>
-      <Text style={[styles.statValue, !value && styles.statEmpty]}>
+      <Text style={[styles.statValue, value == null && styles.statEmpty]}>
         {value ?? '—'}
         {value != null && <Text style={styles.statUnit}> {unit}</Text>}
       </Text>
@@ -48,145 +27,131 @@ function StatCard({ icon, value, unit, label, badge, badgeColor }) {
   );
 }
 
-function MapCard({ address, lastUpdate }) {
-  return (
-    <View style={styles.mapCard}>
-      <View style={styles.mapArea}>
-        {/* Grid lines */}
-        <View style={styles.gridV}>
-          {[0,1,2,3,4,5].map(i => <View key={i} style={styles.gridLineV} />)}
-        </View>
-        <View style={styles.gridH}>
-          {[0,1,2,3,4].map(i => <View key={i} style={styles.gridLineH} />)}
-        </View>
-        {/* Pin */}
-        <View style={styles.pin}>
-          <View style={styles.pinPulse} />
-          <View style={styles.pinRing} />
-          <View style={styles.pinCore}>
-            <Text style={{ fontSize: 18 }}>🛵</Text>
-          </View>
-        </View>
-        {/* Chip */}
-        <View style={styles.locationChip}>
-          <Text style={styles.locationChipText}>
-            📍 {address ?? 'Localisation en attente…'}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.mapFooter}>
-        <View style={[styles.dot, { backgroundColor: lastUpdate ? C.success : C.textMuted }]} />
-        <Text style={styles.mapFooterText}>
-          {lastUpdate ? `Mis à jour ${lastUpdate}` : 'En attente du GPS…'}
-        </Text>
-        <TouchableOpacity style={styles.mapBtn}>
-          <Text style={styles.mapBtnText}>Voir carte →</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
 function ToggleCard({ icon, label, status, active, onPress }) {
   return (
-    <TouchableOpacity
-      style={[styles.toggleCard, active && styles.toggleCardOn]}
-      onPress={onPress}
-      activeOpacity={0.75}
-    >
+    <TouchableOpacity style={[styles.toggleCard, active && styles.toggleCardOn]} onPress={onPress} activeOpacity={0.75}>
       <Text style={styles.toggleIcon}>{icon}</Text>
       <Text style={styles.toggleLabel}>{label}</Text>
       <Text style={[styles.toggleStatus, active && { color: C.accent }]}>{status}</Text>
-      <View style={[styles.toggle, active && styles.toggleOn]}>
+      <View style={[styles.track, active && styles.trackOn]}>
         <View style={[styles.thumb, active && styles.thumbOn]} />
       </View>
     </TouchableOpacity>
   );
 }
 
+function MapCard({ address, lastUpdate, connected }) {
+  return (
+    <View style={styles.mapCard}>
+      <View style={styles.mapArea}>
+        {/* Grid lines */}
+        {[0,1,2,3,4,5].map(i => (
+          <View key={`v${i}`} style={[styles.gridLine, styles.gridV, { left: `${i * 20}%` }]} />
+        ))}
+        {[0,1,2,3,4].map(i => (
+          <View key={`h${i}`} style={[styles.gridLine, styles.gridH, { top: `${i * 25}%` }]} />
+        ))}
+        {connected ? (
+          <View style={styles.pin}>
+            <View style={styles.pinPulse} />
+            <View style={styles.pinRing} />
+            <View style={styles.pinCore}><Text style={{ fontSize: 18 }}>🛵</Text></View>
+          </View>
+        ) : (
+          <Text style={styles.offlineText}>Hors ligne — GPS non disponible</Text>
+        )}
+        {address && (
+          <View style={styles.locationChip}>
+            <Text style={styles.chipText}>📍 {address}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.mapFooter}>
+        <View style={[styles.dot, { backgroundColor: connected ? C.success : C.textMuted }]} />
+        <Text style={styles.mapFooterText}>
+          {lastUpdate ? `Mis à jour ${lastUpdate}` : 'En attente du GPS…'}
+        </Text>
+        {connected && (
+          <TouchableOpacity style={styles.mapBtn}>
+            <Text style={styles.mapBtnText}>Voir carte →</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────
-export default function DashboardScreen() {
-  const [refreshing, setRefreshing] = useState(false);
-  const [alarm, setAlarm]     = useState(false);
-  const [starter, setStarter] = useState(false);
+export default function DashboardScreen({ route, navigation }) {
+  const s = route.params?.scooter;
+  const [alarm,   setAlarm]   = useState(s?.alarm   ?? false);
+  const [starter, setStarter] = useState(s?.starter ?? false);
 
-  // TODO: remplacer par MQTT / API temps réel
-  const scooter = {
-    connected: false,
-    model:     null,
-    battery:   null,
-    charging:  false,
-    speed:     null,
-    range:     null,
-    temp:      null,
-    gps: { address: null, lastUpdate: null },
-  };
+  if (!s) return null;
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1200);
-  }, []);
+  const sc = STATUS[s.status];
 
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.accent}
-            colors={[C.accent]}
-            progressBackgroundColor={C.bgCard}
-          />
-        }
-      >
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Bonjour 👋</Text>
-            <Text style={styles.subtitle}>{scooter.model ?? 'Aucun appareil'}</Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* Back */}
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.backText}>← Retour</Text>
+        </TouchableOpacity>
+
+        {/* Hero */}
+        <View style={styles.hero}>
+          <View style={styles.heroLeft}>
+            <View style={[styles.statusBadge, { borderColor: sc.color + '44', backgroundColor: sc.bg }]}>
+              <View style={[styles.dot, { backgroundColor: sc.color }]} />
+              <Text style={[styles.statusText, { color: sc.color }]}>{sc.label}</Text>
+            </View>
+            <Text style={styles.heroName}>{s.name}</Text>
+            <Text style={styles.heroModel}>{s.model}</Text>
           </View>
-          <View style={[styles.statusBadge, scooter.connected && styles.statusOn]}>
-            <View style={[styles.dot, { backgroundColor: scooter.connected ? C.success : C.textMuted }]} />
-            <Text style={[styles.statusText, scooter.connected && { color: C.success }]}>
-              {scooter.connected ? 'Connecté' : 'Hors ligne'}
-            </Text>
-          </View>
+          <Text style={styles.heroEmoji}>🛵</Text>
         </View>
 
-        {/* ── Map GPS ── */}
+        {/* Hero stats */}
+        <View style={styles.heroStats}>
+          {[
+            { label: 'Batterie',  value: s.battery != null ? `${s.battery}%` : '—',  color: battColor(s.battery) },
+            { label: 'Autonomie', value: s.range   != null ? `${s.range} km` : '—',  color: C.white },
+            { label: 'Trajets',   value: `${s.trips}`,                                color: C.white },
+            { label: 'Total km',  value: `${(s.totalKm/1000).toFixed(1)}k`,           color: C.white },
+          ].map(({ label, value, color }) => (
+            <View key={label} style={styles.heroStat}>
+              <Text style={[styles.heroStatValue, { color }]}>{value}</Text>
+              <Text style={styles.heroStatLabel}>{label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Map */}
         <Text style={styles.sectionTitle}>Localisation</Text>
-        <MapCard address={scooter.gps.address} lastUpdate={scooter.gps.lastUpdate} />
+        <MapCard
+          address={s.gps.address}
+          lastUpdate={s.gps.lastUpdate}
+          connected={s.status !== 'offline'}
+        />
 
-        {/* ── Controls ── */}
+        {/* Controls */}
         <Text style={styles.sectionTitle}>Contrôles</Text>
-        <View style={styles.controlsRow}>
-          <ToggleCard
-            icon="🔒" label="Alarme"
-            status={alarm ? 'Armée' : 'Désarmée'}
-            active={alarm} onPress={() => setAlarm(v => !v)}
-          />
-          <ToggleCard
-            icon="⚡" label="Démarrage"
-            status={starter ? 'Actif' : 'Inactif'}
-            active={starter} onPress={() => setStarter(v => !v)}
-          />
+        <View style={styles.row}>
+          <ToggleCard icon="🔒" label="Alarme"    status={alarm   ? 'Armée'  : 'Désarmée'} active={alarm}   onPress={() => setAlarm(v => !v)} />
+          <ToggleCard icon="⚡" label="Démarrage" status={starter ? 'Actif'  : 'Inactif'}  active={starter} onPress={() => setStarter(v => !v)} />
         </View>
 
-        {/* ── Live Stats ── */}
+        {/* Stats */}
         <Text style={styles.sectionTitle}>Stats en direct</Text>
         <View style={styles.statsGrid}>
-          <StatCard
-            icon="🔋" value={scooter.battery} unit="%" label="BATTERIE"
-            badge={scooter.charging ? '⚡ Charge' : null}
-            badgeColor={C.success}
-          />
-          <StatCard icon="🚀" value={scooter.speed}   unit="km/h" label="VITESSE" />
-          <StatCard icon="🛣️" value={scooter.range}   unit="km"   label="AUTONOMIE" />
-          <StatCard icon="🌡️" value={scooter.temp}    unit="°C"   label="TEMPÉRATURE" />
+          <StatCard icon="🔋" value={s.battery} unit="%" label="BATTERIE"
+            badge={s.charging ? '⚡ Charge' : null} badgeColor={C.success} />
+          <StatCard icon="🚀" value={s.speed}   unit="km/h" label="VITESSE" />
+          <StatCard icon="🛣️" value={s.range}   unit="km"   label="AUTONOMIE" />
+          <StatCard icon="🌡️" value={s.temp}    unit="°C"   label="TEMPÉRATURE" />
         </View>
 
         <View style={{ height: 40 }} />
@@ -197,116 +162,73 @@ export default function DashboardScreen() {
 
 // ─── Styles ───────────────────────────────────────────────
 const styles = StyleSheet.create({
-  screen:   { flex: 1, backgroundColor: C.bg },
-  scroll:   { padding: S.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40 },
+  screen: { flex: 1, backgroundColor: C.bg },
+  scroll: { padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 },
 
-  // Header
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: S.xxl,
+  backBtn: {
+    alignSelf: 'flex-start', backgroundColor: C.bgElevated,
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8,
+    borderWidth: 1, borderColor: C.border, marginBottom: 20,
   },
-  greeting: { fontSize: F.xxl * 0.6, fontWeight: '800', color: C.white, letterSpacing: -0.5 },
-  subtitle: { fontSize: F.md, color: C.textMuted, marginTop: 2 },
-  statusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: C.bgCard, paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 20, borderWidth: 1, borderColor: C.border,
-  },
-  statusOn:   { backgroundColor: C.successDim, borderColor: C.success },
-  statusText: { fontSize: F.sm, fontWeight: '700', color: C.textMuted, letterSpacing: 0.3 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
+  backText: { fontSize: 12, fontWeight: '700', color: C.textSecondary },
 
-  // Section title
-  sectionTitle: {
-    fontSize: F.lg, fontWeight: '800', color: C.white,
-    marginBottom: S.md, marginTop: S.sm, letterSpacing: -0.3,
-  },
+  // Hero
+  hero:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  heroLeft:  { flex: 1 },
+  heroName:  { fontSize: 28, fontWeight: '900', color: C.white, letterSpacing: -1, marginTop: 8 },
+  heroModel: { fontSize: 11, color: C.textMuted, marginTop: 2 },
+  heroEmoji: { fontSize: 48 },
+
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  dot:         { width: 7, height: 7, borderRadius: 4 },
+  statusText:  { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+
+  heroStats:      { flexDirection: 'row', gap: 8, marginBottom: 28 },
+  heroStat:       { flex: 1, backgroundColor: C.bgElevated, borderRadius: 14, padding: 12, alignItems: 'center' },
+  heroStatValue:  { fontSize: 16, fontWeight: '800', color: C.white, letterSpacing: -0.5 },
+  heroStatLabel:  { fontSize: 8, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 3 },
+
+  sectionTitle: { fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12, marginTop: 4 },
 
   // Map
-  mapCard: {
-    backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden',
-    borderWidth: 1, borderColor: C.border, marginBottom: S.xl,
-  },
-  mapArea: {
-    height: 200, backgroundColor: C.bgCardLight,
-    justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
-  },
-  gridV: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    flexDirection: 'row', justifyContent: 'space-evenly',
-  },
-  gridLineV: { width: 1, height: '100%', backgroundColor: '#1E1E2E' },
-  gridH: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'space-evenly',
-  },
-  gridLineH: { width: '100%', height: 1, backgroundColor: '#1E1E2E' },
-  pin: { alignItems: 'center', justifyContent: 'center' },
-  pinPulse: {
-    position: 'absolute', width: 80, height: 80, borderRadius: 40,
-    backgroundColor: 'rgba(0,229,255,0.06)', borderWidth: 1, borderColor: 'rgba(0,229,255,0.1)',
-  },
-  pinRing: {
-    position: 'absolute', width: 56, height: 56, borderRadius: 28,
-    backgroundColor: C.accentGlow, borderWidth: 1.5, borderColor: C.borderAccent,
-  },
-  pinCore: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: C.bgCard,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: C.accent,
-    shadowColor: C.accent, shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6, shadowRadius: 10, elevation: 8,
-  },
-  locationChip: {
-    position: 'absolute', bottom: 12, left: 12,
-    backgroundColor: C.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-  },
-  locationChipText: { fontSize: F.sm, fontWeight: '700', color: C.bg },
-  mapFooter: {
-    flexDirection: 'row', alignItems: 'center', padding: S.lg, gap: 8,
-  },
-  mapFooterText: { flex: 1, fontSize: F.md, fontWeight: '600', color: C.textSecondary },
-  mapBtn: {
-    backgroundColor: C.bgElevated, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12,
-  },
-  mapBtnText: { fontSize: F.sm, fontWeight: '700', color: C.accent },
+  mapCard:      { backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.border, marginBottom: 20 },
+  mapArea:      { height: 180, backgroundColor: '#13131A', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  gridLine:     { position: 'absolute', backgroundColor: '#1E1E2E' },
+  gridV:        { width: 1, height: '100%' },
+  gridH:        { width: '100%', height: 1 },
+  offlineText:  { fontSize: 11, color: C.textMuted, textAlign: 'center' },
+  pin:          { alignItems: 'center', justifyContent: 'center' },
+  pinPulse:     { position: 'absolute', width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(0,229,255,0.05)', borderWidth: 1, borderColor: 'rgba(0,229,255,0.1)' },
+  pinRing:      { position: 'absolute', width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(0,229,255,0.08)', borderWidth: 1.5, borderColor: 'rgba(0,229,255,0.25)' },
+  pinCore:      { width: 40, height: 40, borderRadius: 20, backgroundColor: C.bgCard, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: C.accent },
+  locationChip: { position: 'absolute', bottom: 10, left: 10, backgroundColor: C.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 },
+  chipText:     { fontSize: 10, fontWeight: '700', color: C.bg },
+  mapFooter:    { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 8 },
+  mapFooterText:{ flex: 1, fontSize: 12, color: C.textSecondary },
+  mapBtn:       { backgroundColor: C.bgElevated, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  mapBtnText:   { fontSize: 10, fontWeight: '700', color: C.accent },
 
-  // Controls
-  controlsRow: { flexDirection: 'row', gap: S.md, marginBottom: S.xl },
-  toggleCard: {
-    flex: 1, backgroundColor: C.bgCard, borderRadius: 18, padding: S.lg,
-    borderWidth: 1, borderColor: C.border, alignItems: 'center', gap: 6,
-  },
-  toggleCardOn: { backgroundColor: C.bgCardLight, borderColor: C.borderAccent },
-  toggleIcon:   { fontSize: 26 },
-  toggleLabel:  { fontSize: F.sm, fontWeight: '800', color: C.white },
-  toggleStatus: { fontSize: F.xs, color: C.textMuted, fontWeight: '600' },
-  toggle: {
-    width: 46, height: 26, borderRadius: 13, backgroundColor: C.bgElevated,
-    padding: 3, justifyContent: 'center', marginTop: 4,
-  },
-  toggleOn: { backgroundColor: C.accent },
-  thumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: C.textMuted },
-  thumbOn: { backgroundColor: C.bg, alignSelf: 'flex-end' },
+  // Toggles
+  row:          { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  toggleCard:   { flex: 1, backgroundColor: C.bgCard, borderRadius: 18, padding: 16, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.border },
+  toggleCardOn: { backgroundColor: '#1A1A26', borderColor: 'rgba(0,229,255,0.25)' },
+  toggleIcon:   { fontSize: 24 },
+  toggleLabel:  { fontSize: 11, fontWeight: '800', color: C.white },
+  toggleStatus: { fontSize: 10, color: C.textMuted },
+  track:        { width: 42, height: 24, borderRadius: 12, backgroundColor: C.bgElevated, padding: 3, justifyContent: 'center', marginTop: 4 },
+  trackOn:      { backgroundColor: C.accent },
+  thumb:        { width: 18, height: 18, borderRadius: 9, backgroundColor: C.textMuted },
+  thumbOn:      { backgroundColor: C.bg, alignSelf: 'flex-end' },
 
-  // Stats grid
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: S.md, marginBottom: S.xl },
-  statCard: {
-    width: '47.5%', backgroundColor: C.bgCard, borderRadius: 18,
-    padding: S.lg, borderWidth: 1, borderColor: C.border, minHeight: 120,
-    justifyContent: 'space-between',
-  },
-  statTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statIcon:  { fontSize: 22 },
-  badge: {
-    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, borderWidth: 1,
-  },
-  badgeText: { fontSize: F.xs, fontWeight: '700' },
-  statValue: { fontSize: F.xxl, fontWeight: '900', color: C.white, letterSpacing: -1 },
-  statEmpty: { color: C.textMuted },
-  statUnit:  { fontSize: F.md, fontWeight: '600', color: C.textSecondary },
-  statLabel: {
-    fontSize: F.xs, fontWeight: '700', color: C.textMuted,
-    textTransform: 'uppercase', letterSpacing: 0.8,
-  },
+  // Stats
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  statCard:  { width: '47.5%', backgroundColor: C.bgCard, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border, minHeight: 110, justifyContent: 'space-between' },
+  statTop:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statIcon:  { fontSize: 20 },
+  badge:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1 },
+  badgeText: { fontSize: 9, fontWeight: '700' },
+  statValue: { fontSize: 32, fontWeight: '900', color: C.white, letterSpacing: -1.5 },
+  statEmpty: { color: C.textMuted, fontSize: 24 },
+  statUnit:  { fontSize: 12, fontWeight: '600', color: C.textSecondary },
+  statLabel: { fontSize: 8, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 },
 });
