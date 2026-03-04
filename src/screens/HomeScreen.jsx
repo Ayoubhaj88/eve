@@ -178,28 +178,28 @@ function DetailScreen({ s, onBack, onDeleted, onEdited }) {
     await supabase.from('telemetry').insert({ scooter_id: s.id, starter: v, alarm, battery: data.battery, status: data.status });
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
   Alert.alert(
     'Supprimer ce scooter ?',
     `"${data.name}" sera supprimé définitivement.`,
     [
       { text: 'Annuler', style: 'cancel' },
       {
-        text: 'Supprimer', style: 'destructive',
+        text: 'Supprimer',
+        style: 'destructive',
         onPress: async () => {
-          // Supprimer telemetry d'abord, puis le scooter
-          await supabase.from('telemetry').delete().eq('scooter_id', s.id);
-          const { error } = await supabase.from('scooters').delete().eq('id', s.id);
-          console.log('error:', error);
-          if (error) {
-            Alert.alert('Erreur', error.message);
-          } else {
+          try {
+            await supabase.from('telemetry').delete().eq('scooter_id', s.id);
+            await supabase.from('scooters').delete().eq('id', s.id);
             onBack();
-            setTimeout(() => onDeleted(), 300);
+            setTimeout(() => onDeleted(), 500);
+          } catch (err) {
+            Alert.alert('Erreur', err.message);
           }
         },
       },
-    ]
+    ],
+    { cancelable: true }
   );
 };
 
