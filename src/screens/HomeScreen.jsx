@@ -179,22 +179,23 @@ function DetailScreen({ s, onBack, onDeleted, onEdited }) {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Supprimer ce scooter ?',
-      `"${data.name}" sera supprimé définitivement.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer', style: 'destructive',
-          onPress: async () => {
-            const { error } = await supabase.from('scooters').delete().eq('id', s.id);
-            if (error) Alert.alert('Erreur', error.message);
-            else { onDeleted(); onBack(); }
-          },
+  Alert.alert(
+    'Supprimer ce scooter ?',
+    `"${data.name}" sera supprimé définitivement.`,
+    [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer', style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase.from('scooters').delete().eq('id', s.id);
+          console.log('delete error:', error);
+          if (error) Alert.alert('Erreur', error.message);
+          else { onDeleted(); onBack(); }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }}
