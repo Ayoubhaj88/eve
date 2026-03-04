@@ -447,10 +447,7 @@ export default function HomeScreen() {
                       <View style={{ height: '100%', borderRadius: 2, width: `${item.battery ?? 0}%`, backgroundColor: battColor(item.battery) }} />
                     </View>
                   </View>
-                  <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: C.white }}>{item.range ?? '—'}</Text>
-                    <Text style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', marginTop: 3 }}>km restants</Text>
-                  </View>
+                  
                 </View>
 
                 <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 12 }}>
