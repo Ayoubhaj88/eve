@@ -53,7 +53,6 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   const [reference, setReference] = useState(initial?.reference ?? '');
   const [loading,   setLoading]   = useState(false);
 
-  // Sync si on rouvre le modal avec un autre scooter
   useEffect(() => {
     setName(initial?.name ?? '');
     setModel(initial?.model ?? '');
@@ -68,14 +67,12 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
     setLoading(true);
     try {
       if (isEdit) {
-        // Modifier
         const { error } = await supabase
           .from('scooters')
           .update({ name: name.trim(), model: model.trim(), reference: reference.trim() })
           .eq('id', initial.id);
         if (error) throw error;
       } else {
-        // Ajouter
         const { error } = await supabase
           .from('scooters')
           .insert({ name: name.trim(), model: model.trim(), reference: reference.trim() });
@@ -100,10 +97,8 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
           padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
           borderTopWidth: 1, borderColor: C.border,
         }}>
-          {/* Handle */}
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 24 }} />
 
-          {/* Titre */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <Text style={{ fontSize: 22, fontWeight: '900', color: C.white, letterSpacing: -0.5 }}>
               {isEdit ? 'Modifier 🛵' : 'Nouveau 🛵'}
@@ -114,28 +109,24 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
             </TouchableOpacity>
           </View>
 
-          {/* Nom */}
           <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Nom *</Text>
           <TextInput value={name} onChangeText={setName} placeholder="ex: Scooter 1"
             placeholderTextColor={C.textMuted}
             style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16 }}
           />
 
-          {/* Modèle */}
           <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Modèle</Text>
           <TextInput value={model} onChangeText={setModel} placeholder="ex: Niu NQi GT Pro"
             placeholderTextColor={C.textMuted}
             style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16 }}
           />
 
-          {/* Référence */}
           <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Référence</Text>
           <TextInput value={reference} onChangeText={setReference} placeholder="ex: SCT-001"
             placeholderTextColor={C.textMuted}
             style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 28 }}
           />
 
-          {/* Bouton */}
           <TouchableOpacity onPress={handleSave} disabled={loading} activeOpacity={0.8}
             style={{ backgroundColor: C.accent, borderRadius: 16, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
             {loading
@@ -179,29 +170,29 @@ function DetailScreen({ s, onBack, onDeleted, onEdited }) {
   };
 
   const handleDelete = async () => {
-  Alert.alert(
-    'Supprimer ce scooter ?',
-    `"${data.name}" sera supprimé définitivement.`,
-    [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await supabase.from('telemetry').delete().eq('scooter_id', s.id);
-            await supabase.from('scooters').delete().eq('id', s.id);
-            onBack();
-            setTimeout(() => onDeleted(), 500);
-          } catch (err) {
-            Alert.alert('Erreur', err.message);
-          }
+    Alert.alert(
+      'Supprimer ce scooter ?',
+      `"${data.name}" sera supprimé définitivement.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.from('telemetry').delete().eq('scooter_id', s.id);
+              await supabase.from('scooters').delete().eq('id', s.id);
+              onBack();
+              setTimeout(() => onDeleted(), 500);
+            } catch (err) {
+              Alert.alert('Erreur', err.message);
+            }
+          },
         },
-      },
-    ],
-    { cancelable: true }
-  );
-};
+      ],
+      { cancelable: true }
+    );
+  };
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }}
@@ -216,12 +207,10 @@ function DetailScreen({ s, onBack, onDeleted, onEdited }) {
         </TouchableOpacity>
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {/* Modifier */}
           <TouchableOpacity onPress={() => setShowEdit(true)}
             style={{ backgroundColor: C.bgElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border }}>
             <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>⚙️ Modifier</Text>
           </TouchableOpacity>
-          {/* Supprimer */}
           <TouchableOpacity onPress={handleDelete}
             style={{ backgroundColor: C.dangerDim, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.danger + '44' }}>
             <Text style={{ fontSize: 12, fontWeight: '700', color: C.danger }}>🗑️</Text>
@@ -247,12 +236,11 @@ function DetailScreen({ s, onBack, onDeleted, onEdited }) {
         <Text style={{ fontSize: 48 }}>🛵</Text>
       </View>
 
-      {/* Mini stats */}
+      {/* Mini stats — sans Vitesse */}
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
         {[
           { label: 'Batterie',  value: data.battery != null ? `${data.battery}%` : '—', color: battColor(data.battery) },
           { label: 'Autonomie', value: data.range   != null ? `${data.range}km`  : '—', color: C.white },
-          { label: 'Vitesse',   value: data.speed   != null ? `${data.speed}km/h`: '—', color: C.white },
           { label: 'Temp',      value: data.temp    != null ? `${data.temp}°C`   : '—', color: C.white },
         ].map(({ label, value, color }) => (
           <View key={label} style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
@@ -311,14 +299,13 @@ function DetailScreen({ s, onBack, onDeleted, onEdited }) {
         ))}
       </View>
 
-      {/* Stats */}
+      {/* Stats en direct — sans Vitesse */}
       <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Stats en direct</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {[
-          { icon: '🔋', value: data.battery, unit: '%',    label: 'BATTERIE' },
-          { icon: '🚀', value: data.speed,   unit: 'km/h', label: 'VITESSE' },
-          { icon: '🛣️', value: data.range,   unit: 'km',   label: 'AUTONOMIE' },
-          { icon: '🌡️', value: data.temp,    unit: '°C',   label: 'TEMPÉRATURE' },
+          { icon: '🔋', value: data.battery, unit: '%',  label: 'BATTERIE' },
+          { icon: '🛣️', value: data.range,   unit: 'km', label: 'AUTONOMIE' },
+          { icon: '🌡️', value: data.temp,    unit: '°C', label: 'TEMPÉRATURE' },
         ].map(({ icon, value, unit, label }) => (
           <View key={label} style={{ width: '47.5%', backgroundColor: C.bgCard, borderRadius: 16, padding: 14,
             borderWidth: 1, borderColor: C.border, minHeight: 110, justifyContent: 'space-between' }}>
@@ -333,7 +320,6 @@ function DetailScreen({ s, onBack, onDeleted, onEdited }) {
 
       <View style={{ height: 40 }} />
 
-      {/* Modal Modifier */}
       <ScooterFormModal
         visible={showEdit}
         onClose={() => setShowEdit(false)}
@@ -406,7 +392,7 @@ export default function HomeScreen() {
                     Ma <Text style={{ color: C.accent }}>Flotte</Text>
                   </Text>
                   <Text style={{ fontSize: 12, color: C.textSecondary, marginTop: 6 }}>
-                    {scooters.length} appareil{scooters.length > 1 ? 's' : ''}
+                    {scooters.length} scooter{scooters.length > 1 ? 's' : ''}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowAdd(true)} activeOpacity={0.8}
@@ -449,6 +435,8 @@ export default function HomeScreen() {
                     <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>{sc.label}</Text>
                   </View>
                 </View>
+
+                {/* Cards — sans km/h */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
                     <Text style={{ fontSize: 15, fontWeight: '700', color: battColor(item.battery) }}>
@@ -463,11 +451,8 @@ export default function HomeScreen() {
                     <Text style={{ fontSize: 15, fontWeight: '700', color: C.white }}>{item.range ?? '—'}</Text>
                     <Text style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', marginTop: 3 }}>km restants</Text>
                   </View>
-                  <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: C.white }}>{item.speed ?? '—'}</Text>
-                    <Text style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', marginTop: 3 }}>km/h</Text>
-                  </View>
                 </View>
+
                 <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 12 }}>
                   {item.last_update ? `Mis à jour ${timeAgo(item.last_update)}` : 'Aucune donnée'} →
                 </Text>

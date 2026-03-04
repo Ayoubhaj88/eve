@@ -44,7 +44,6 @@ function MapCard({ address, lastUpdate, connected }) {
   return (
     <View style={styles.mapCard}>
       <View style={styles.mapArea}>
-        {/* Grid lines */}
         {[0,1,2,3,4,5].map(i => (
           <View key={`v${i}`} style={[styles.gridLine, styles.gridV, { left: `${i * 20}%` }]} />
         ))}
@@ -117,10 +116,10 @@ export default function DashboardScreen({ route, navigation }) {
         {/* Hero stats */}
         <View style={styles.heroStats}>
           {[
-            { label: 'Batterie',  value: s.battery != null ? `${s.battery}%` : '—',  color: battColor(s.battery) },
-            { label: 'Autonomie', value: s.range   != null ? `${s.range} km` : '—',  color: C.white },
-            { label: 'Trajets',   value: `${s.trips}`,                                color: C.white },
-            { label: 'Total km',  value: `${(s.totalKm/1000).toFixed(1)}k`,           color: C.white },
+            { label: 'Batterie',  value: s.battery != null ? `${s.battery}%` : '—', color: battColor(s.battery) },
+            { label: 'Autonomie', value: s.range   != null ? `${s.range} km` : '—', color: C.white },
+            { label: 'Trajets',   value: `${s.trips}`,                               color: C.white },
+            { label: 'Total km',  value: `${(s.totalKm/1000).toFixed(1)}k`,          color: C.white },
           ].map(({ label, value, color }) => (
             <View key={label} style={styles.heroStat}>
               <Text style={[styles.heroStatValue, { color }]}>{value}</Text>
@@ -144,14 +143,13 @@ export default function DashboardScreen({ route, navigation }) {
           <ToggleCard icon="⚡" label="Démarrage" status={starter ? 'Actif'  : 'Inactif'}  active={starter} onPress={() => setStarter(v => !v)} />
         </View>
 
-        {/* Stats */}
+        {/* Stats — sans Vitesse */}
         <Text style={styles.sectionTitle}>Stats en direct</Text>
         <View style={styles.statsGrid}>
           <StatCard icon="🔋" value={s.battery} unit="%" label="BATTERIE"
             badge={s.charging ? '⚡ Charge' : null} badgeColor={C.success} />
-          <StatCard icon="🚀" value={s.speed}   unit="km/h" label="VITESSE" />
-          <StatCard icon="🛣️" value={s.range}   unit="km"   label="AUTONOMIE" />
-          <StatCard icon="🌡️" value={s.temp}    unit="°C"   label="TEMPÉRATURE" />
+          <StatCard icon="🛣️" value={s.range}   unit="km"  label="AUTONOMIE" />
+          <StatCard icon="🌡️" value={s.temp}    unit="°C"  label="TEMPÉRATURE" />
         </View>
 
         <View style={{ height: 40 }} />
@@ -172,7 +170,6 @@ const styles = StyleSheet.create({
   },
   backText: { fontSize: 12, fontWeight: '700', color: C.textSecondary },
 
-  // Hero
   hero:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   heroLeft:  { flex: 1 },
   heroName:  { fontSize: 28, fontWeight: '900', color: C.white, letterSpacing: -1, marginTop: 8 },
@@ -190,7 +187,6 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12, marginTop: 4 },
 
-  // Map
   mapCard:      { backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.border, marginBottom: 20 },
   mapArea:      { height: 180, backgroundColor: '#13131A', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   gridLine:     { position: 'absolute', backgroundColor: '#1E1E2E' },
@@ -208,7 +204,6 @@ const styles = StyleSheet.create({
   mapBtn:       { backgroundColor: C.bgElevated, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   mapBtnText:   { fontSize: 10, fontWeight: '700', color: C.accent },
 
-  // Toggles
   row:          { flexDirection: 'row', gap: 10, marginBottom: 20 },
   toggleCard:   { flex: 1, backgroundColor: C.bgCard, borderRadius: 18, padding: 16, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.border },
   toggleCardOn: { backgroundColor: '#1A1A26', borderColor: 'rgba(0,229,255,0.25)' },
@@ -220,7 +215,6 @@ const styles = StyleSheet.create({
   thumb:        { width: 18, height: 18, borderRadius: 9, backgroundColor: C.textMuted },
   thumbOn:      { backgroundColor: C.bg, alignSelf: 'flex-end' },
 
-  // Stats
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statCard:  { width: '47.5%', backgroundColor: C.bgCard, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border, minHeight: 110, justifyContent: 'space-between' },
   statTop:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
