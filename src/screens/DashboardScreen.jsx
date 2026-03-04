@@ -117,7 +117,6 @@ export default function DashboardScreen({ route, navigation }) {
         <View style={styles.heroStats}>
           {[
             { label: 'Batterie',  value: s.battery != null ? `${s.battery}%` : '—', color: battColor(s.battery) },
-            { label: 'Autonomie', value: s.range   != null ? `${s.range} km` : '—', color: C.white },
             { label: 'Trajets',   value: `${s.trips}`,                               color: C.white },
             { label: 'Total km',  value: `${(s.totalKm/1000).toFixed(1)}k`,          color: C.white },
           ].map(({ label, value, color }) => (
@@ -148,7 +147,6 @@ export default function DashboardScreen({ route, navigation }) {
         <View style={styles.statsGrid}>
           <StatCard icon="🔋" value={s.battery} unit="%" label="BATTERIE"
             badge={s.charging ? '⚡ Charge' : null} badgeColor={C.success} />
-          <StatCard icon="🛣️" value={s.range}   unit="km"  label="AUTONOMIE" />
           <StatCard icon="🌡️" value={s.temp}    unit="°C"  label="TEMPÉRATURE" />
         </View>
 
