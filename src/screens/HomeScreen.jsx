@@ -16,6 +16,7 @@ const C = {
   warning:      '#FFB300',
   warningDim:   'rgba(255,179,0,0.12)',
   danger:       '#FF1744',
+  dangerDim:    'rgba(255,23,68,0.12)',
   white:        '#FFFFFF',
   textSecondary:'#8A8A9A',
   textMuted:    '#4A4A5A',
@@ -44,49 +45,55 @@ function timeAgo(dateStr) {
   return `il y a ${Math.floor(diff/3600)}h`;
 }
 
-// ─── Modal Ajout Scooter ───────────────────────────────────
-function AddScooterModal({ visible, onClose, onAdded }) {
-  const [name,    setName]    = useState('');
-  const [model,   setModel]   = useState('');
-  const [reference, setReference] = useState('');
-  const [loading, setLoading] = useState(false);
+// ─── Modal réutilisable (Ajout + Modification) ─────────────
+function ScooterFormModal({ visible, onClose, onSaved, initial }) {
+  const isEdit = !!initial;
+  const [name,      setName]      = useState(initial?.name      ?? '');
+  const [model,     setModel]     = useState(initial?.model     ?? '');
+  const [reference, setReference] = useState(initial?.reference ?? '');
+  const [loading,   setLoading]   = useState(false);
 
-  const reset = () => { setName(''); setModel(''); setReference(''); };
+  // Sync si on rouvre le modal avec un autre scooter
+  useEffect(() => {
+    setName(initial?.name ?? '');
+    setModel(initial?.model ?? '');
+    setReference(initial?.reference ?? '');
+  }, [initial, visible]);
 
-  const handleAdd = async () => {
-  if (!name.trim()) {
-    Alert.alert('Erreur', 'Le nom est obligatoire.');
-    return;
-  }
-  setLoading(true);
-  try {
-    const { data: scooter, error: err1 } = await supabase
-      .from('scooters')
-      .insert({ name: name.trim(), model: model.trim(), reference: reference.trim() })
-      .select()
-      .single();
-    if (err1) throw err1;
-    reset();
-    onAdded();
-    onClose();
-  } catch (err) {
-    Alert.alert('Erreur', err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  const handleSave = async () => {
+    if (!name.trim()) {
+      Alert.alert('Erreur', 'Le nom est obligatoire.');
+      return;
+    }
+    setLoading(true);
+    try {
+      if (isEdit) {
+        // Modifier
+        const { error } = await supabase
+          .from('scooters')
+          .update({ name: name.trim(), model: model.trim(), reference: reference.trim() })
+          .eq('id', initial.id);
+        if (error) throw error;
+      } else {
+        // Ajouter
+        const { error } = await supabase
+          .from('scooters')
+          .insert({ name: name.trim(), model: model.trim(), reference: reference.trim() });
+        if (error) throw error;
+      }
+      onSaved();
+      onClose();
+    } catch (err) {
+      Alert.alert('Erreur', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}
-          activeOpacity={1}
-          onPress={onClose}
-        />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
         <View style={{
           backgroundColor: C.bgCard,
           borderTopLeftRadius: 28, borderTopRightRadius: 28,
@@ -99,7 +106,7 @@ function AddScooterModal({ visible, onClose, onAdded }) {
           {/* Titre */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <Text style={{ fontSize: 22, fontWeight: '900', color: C.white, letterSpacing: -0.5 }}>
-              Nouveau 🛵
+              {isEdit ? 'Modifier 🛵' : 'Nouveau 🛵'}
             </Text>
             <TouchableOpacity onPress={onClose}
               style={{ backgroundColor: C.bgElevated, borderRadius: 20, width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}>
@@ -107,70 +114,33 @@ function AddScooterModal({ visible, onClose, onAdded }) {
             </TouchableOpacity>
           </View>
 
-          {/* Champ Nom */}
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
-            Nom *
-          </Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="ex: Scooter 1"
+          {/* Nom */}
+          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Nom *</Text>
+          <TextInput value={name} onChangeText={setName} placeholder="ex: Scooter 1"
             placeholderTextColor={C.textMuted}
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 14, padding: 14,
-              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border,
-              marginBottom: 16,
-            }}
+            style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16 }}
           />
 
-          {/* Champ Modèle */}
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
-            Modèle
-          </Text>
-          <TextInput
-            value={model}
-            onChangeText={setModel}
-            placeholder="ex: Niu NQi GT Pro"
+          {/* Modèle */}
+          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Modèle</Text>
+          <TextInput value={model} onChangeText={setModel} placeholder="ex: Niu NQi GT Pro"
             placeholderTextColor={C.textMuted}
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 14, padding: 14,
-              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border,
-              marginBottom: 16,
-            }}
+            style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16 }}
           />
 
-          {/* Champ Batterie */}
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
-            Référence
-          </Text>
-          <TextInput
-            value={reference}
-            onChangeText={setReference}
-            placeholder="ex: SCT-001"
+          {/* Référence */}
+          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Référence</Text>
+          <TextInput value={reference} onChangeText={setReference} placeholder="ex: SCT-001"
             placeholderTextColor={C.textMuted}
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 14, padding: 14,
-              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border,
-              marginBottom: 28,
-            }}
+            style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 28 }}
           />
 
-          {/* Bouton Ajouter */}
-          <TouchableOpacity
-            onPress={handleAdd}
-            disabled={loading}
-            activeOpacity={0.8}
-            style={{
-              backgroundColor: C.accent, borderRadius: 16, padding: 16,
-              alignItems: 'center',
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
+          {/* Bouton */}
+          <TouchableOpacity onPress={handleSave} disabled={loading} activeOpacity={0.8}
+            style={{ backgroundColor: C.accent, borderRadius: 16, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
             {loading
               ? <ActivityIndicator color={C.bg} />
-              : <Text style={{ fontSize: 15, fontWeight: '900', color: C.bg, letterSpacing: -0.3 }}>
-                  Ajouter le scooter
-                </Text>
+              : <Text style={{ fontSize: 15, fontWeight: '900', color: C.bg }}>{isEdit ? 'Enregistrer' : 'Ajouter le scooter'}</Text>
             }
           </TouchableOpacity>
         </View>
@@ -180,10 +150,11 @@ function AddScooterModal({ visible, onClose, onAdded }) {
 }
 
 // ─── Écran Détail ──────────────────────────────────────────
-function DetailScreen({ s, onBack }) {
-  const [data,    setData]    = useState(s);
-  const [alarm,   setAlarm]   = useState(s.alarm);
-  const [starter, setStarter] = useState(s.starter);
+function DetailScreen({ s, onBack, onDeleted, onEdited }) {
+  const [data,      setData]      = useState(s);
+  const [alarm,     setAlarm]     = useState(s.alarm);
+  const [starter,   setStarter]   = useState(s.starter);
+  const [showEdit,  setShowEdit]  = useState(false);
   const sc = STATUS[data.status] ?? STATUS.offline;
 
   useEffect(() => {
@@ -199,18 +170,30 @@ function DetailScreen({ s, onBack }) {
 
   const handleAlarm = async () => {
     const v = !alarm; setAlarm(v);
-    await supabase.from('telemetry').insert({
-      scooter_id: s.id, alarm: v, starter,
-      battery: data.battery, status: data.status,
-    });
+    await supabase.from('telemetry').insert({ scooter_id: s.id, alarm: v, starter, battery: data.battery, status: data.status });
   };
 
   const handleStarter = async () => {
     const v = !starter; setStarter(v);
-    await supabase.from('telemetry').insert({
-      scooter_id: s.id, starter: v, alarm,
-      battery: data.battery, status: data.status,
-    });
+    await supabase.from('telemetry').insert({ scooter_id: s.id, starter: v, alarm, battery: data.battery, status: data.status });
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Supprimer ce scooter ?',
+      `"${data.name}" sera supprimé définitivement.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer', style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase.from('scooters').delete().eq('id', s.id);
+            if (error) Alert.alert('Erreur', error.message);
+            else { onDeleted(); onBack(); }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -218,12 +201,28 @@ function DetailScreen({ s, onBack }) {
       contentContainerStyle={{ padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }}
       showsVerticalScrollIndicator={false}
     >
-      <TouchableOpacity onPress={onBack}
-        style={{ alignSelf: 'flex-start', backgroundColor: C.bgElevated, borderRadius: 10,
-          paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border, marginBottom: 20 }}>
-        <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSecondary }}>← Retour</Text>
-      </TouchableOpacity>
+      {/* Barre haut */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <TouchableOpacity onPress={onBack}
+          style={{ backgroundColor: C.bgElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSecondary }}>← Retour</Text>
+        </TouchableOpacity>
 
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {/* Modifier */}
+          <TouchableOpacity onPress={() => setShowEdit(true)}
+            style={{ backgroundColor: C.bgElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>⚙️ Modifier</Text>
+          </TouchableOpacity>
+          {/* Supprimer */}
+          <TouchableOpacity onPress={handleDelete}
+            style={{ backgroundColor: C.dangerDim, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.danger + '44' }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.danger }}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Hero */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
@@ -234,10 +233,14 @@ function DetailScreen({ s, onBack }) {
           </View>
           <Text style={{ fontSize: 28, fontWeight: '900', color: C.white, letterSpacing: -1 }}>{data.name}</Text>
           <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{data.model}</Text>
+          {data.reference ? (
+            <Text style={{ fontSize: 10, color: C.accent, marginTop: 4, fontWeight: '700' }}>#{data.reference}</Text>
+          ) : null}
         </View>
         <Text style={{ fontSize: 48 }}>🛵</Text>
       </View>
 
+      {/* Mini stats */}
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
         {[
           { label: 'Batterie',  value: data.battery != null ? `${data.battery}%` : '—', color: battColor(data.battery) },
@@ -252,6 +255,7 @@ function DetailScreen({ s, onBack }) {
         ))}
       </View>
 
+      {/* GPS */}
       <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Localisation</Text>
       <View style={{ backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.border, marginBottom: 20 }}>
         <View style={{ height: 150, backgroundColor: '#13131A', justifyContent: 'center', alignItems: 'center' }}>
@@ -280,6 +284,7 @@ function DetailScreen({ s, onBack }) {
         </View>
       </View>
 
+      {/* Contrôles */}
       <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Contrôles</Text>
       <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
         {[
@@ -299,6 +304,7 @@ function DetailScreen({ s, onBack }) {
         ))}
       </View>
 
+      {/* Stats */}
       <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Stats en direct</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {[
@@ -317,7 +323,19 @@ function DetailScreen({ s, onBack }) {
           </View>
         ))}
       </View>
+
       <View style={{ height: 40 }} />
+
+      {/* Modal Modifier */}
+      <ScooterFormModal
+        visible={showEdit}
+        onClose={() => setShowEdit(false)}
+        initial={data}
+        onSaved={() => {
+          setShowEdit(false);
+          onEdited();
+        }}
+      />
     </ScrollView>
   );
 }
@@ -327,7 +345,7 @@ export default function HomeScreen() {
   const [scooters,  setScooters]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [selected,  setSelected]  = useState(null);
-  const [showModal, setShowModal] = useState(false);
+  const [showAdd,   setShowAdd]   = useState(false);
 
   const fetchScooters = async () => {
     const { data, error } = await supabase.from('scooters_live').select('*');
@@ -340,13 +358,19 @@ export default function HomeScreen() {
     fetchScooters();
     const channel = supabase
       .channel('telemetry-all')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' },
-        () => fetchScooters())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' }, () => fetchScooters())
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, []);
 
-  if (selected) return <DetailScreen s={selected} onBack={() => setSelected(null)} />;
+  if (selected) return (
+    <DetailScreen
+      s={selected}
+      onBack={() => setSelected(null)}
+      onDeleted={() => { fetchScooters(); setSelected(null); }}
+      onEdited={() => fetchScooters()}
+    />
+  );
 
   const online   = scooters.filter(s => s.status !== 'offline').length;
   const charging = scooters.filter(s => s.status === 'charging').length;
@@ -355,7 +379,6 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={C.accent} />
@@ -369,33 +392,24 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={() => (
             <>
-              {/* Header */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
                 <View>
-              
-                  
+                  <Text style={{ fontSize: 10, letterSpacing: 3, color: C.accent, textTransform: 'uppercase', marginBottom: 8 }}>Tableau de bord</Text>
+                  <Text style={{ fontSize: 36, fontWeight: '900', color: C.white, letterSpacing: -1 }}>
+                    Ma <Text style={{ color: C.accent }}>Flotte</Text>
+                  </Text>
                   <Text style={{ fontSize: 12, color: C.textSecondary, marginTop: 6 }}>
                     {scooters.length} appareil{scooters.length > 1 ? 's' : ''}
                   </Text>
                 </View>
-
-                {/* Bouton + */}
-                <TouchableOpacity
-                  onPress={() => setShowModal(true)}
-                  activeOpacity={0.8}
-                  style={{
-                    width: 48, height: 48, borderRadius: 16,
-                    backgroundColor: C.accent,
+                <TouchableOpacity onPress={() => setShowAdd(true)} activeOpacity={0.8}
+                  style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: C.accent,
                     justifyContent: 'center', alignItems: 'center',
-                    shadowColor: C.accent, shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.4, shadowRadius: 10, elevation: 8,
-                  }}
-                >
+                    shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 }}>
                   <Text style={{ fontSize: 26, color: C.bg, fontWeight: '300', lineHeight: 30 }}>+</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Summary */}
               <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
                 {[
                   { value: online,   color: C.success, label: 'En ligne' },
@@ -408,10 +422,7 @@ export default function HomeScreen() {
                   </View>
                 ))}
               </View>
-
-              <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 14 }}>
-                Appareils
-              </Text>
+              <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 14 }}>Appareils</Text>
             </>
           )}
           renderItem={({ item }) => {
@@ -423,6 +434,7 @@ export default function HomeScreen() {
                   <View>
                     <Text style={{ fontSize: 18, fontWeight: '700', color: C.white }}>{item.name}</Text>
                     <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{item.model}</Text>
+                    {item.reference ? <Text style={{ fontSize: 9, color: C.accent, marginTop: 2 }}>#{item.reference}</Text> : null}
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5,
                     borderRadius: 20, borderWidth: 1, borderColor: sc.color + '44', backgroundColor: sc.bg }}>
@@ -460,11 +472,10 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* Modal Ajout */}
-      <AddScooterModal
-        visible={showModal}
-        onClose={() => setShowModal(false)}
-        onAdded={fetchScooters}
+      <ScooterFormModal
+        visible={showAdd}
+        onClose={() => setShowAdd(false)}
+        onSaved={fetchScooters}
       />
     </View>
   );
