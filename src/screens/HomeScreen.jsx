@@ -407,7 +407,7 @@ export default function HomeScreen() {
                 {[
                   { value: online,   color: C.success, label: 'En ligne' },
                   { value: charging, color: C.warning, label: 'En charge' },
-                  { value: `${totalKm.toFixed(0)}km`, color: C.white, label: 'Autonomie' },
+      
                 ].map(({ value, color, label }) => (
                   <View key={label} style={{ flex: 1, backgroundColor: C.bgCard, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
                     <Text style={{ fontSize: 22, fontWeight: '900', color, letterSpacing: -1 }}>{value}</Text>
