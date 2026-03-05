@@ -1,31 +1,30 @@
 import React, { useState, useEffect } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from './src/lib/supabaseClient';
 import SplashScreen from './src/screens/SplashScreen';
-import AppNavigator from './src/navigation/Appnavigator';
-import AuthScreen   from './src/screens/AuthScreen';
+import AppNavigator  from './src/navigation/Appnavigator';
+import AuthScreen    from './src/screens/AuthScreen';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [session,    setSession]    = useState(null);
-  const [authReady,  setAuthReady]  = useState(false);
+  const [session,    setSession]    = useState(undefined); // undefined = pas encore vérifié
 
   useEffect(() => {
-    // Récupère la session existante
+    // Vérifie la session au démarrage
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setAuthReady(true);
+      setSession(data.session ?? null);
     });
 
-    // Écoute les changements de session (login / logout)
+    // Dès que l'utilisateur se connecte OU s'inscrit → session change → redirect automatique
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
+      setSession(s ?? null);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Splash toujours affiché en premier
+  // 1. Splash en premier
   if (showSplash) {
     return (
       <SafeAreaProvider>
@@ -34,9 +33,16 @@ export default function App() {
     );
   }
 
-  // Attend que Supabase vérifie la session
-  if (!authReady) return null;
+  // 2. Loading pendant vérification session
+  if (session === undefined) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0A0F', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color="#00E5FF" size="large" />
+      </View>
+    );
+  }
 
+  // 3. Session active → HomeScreen, sinon → AuthScreen
   return (
     <SafeAreaProvider>
       {session ? <AppNavigator /> : <AuthScreen />}
