@@ -180,17 +180,39 @@ export default function AuthScreen() {
     }
     setLoading(true);
     try {
-      // On tente un login avec un faux mdp — si "Invalid login credentials" → email existe
-      const { error } = await supabase.auth.signInWithPassword({
+      // Tente une inscription avec un faux mot de passe fort
+      // Si l'email existe déjà → Supabase retourne "User already registered"
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
-        password: '__CHECK_ONLY__',
+        password: 'Chk_' + Math.random().toString(36) + '_!9Z',
       });
 
-      if (!error || error.message.includes('Invalid login credentials') || error.message.includes('Email not confirmed')) {
+      if (error) {
+        if (
+          error.message.toLowerCase().includes('already registered') ||
+          error.message.toLowerCase().includes('already exists') ||
+          error.message.toLowerCase().includes('user already')
+        ) {
+          // Compte trouvé
+          setEmailStatus('found');
+          transitionTo('PASSWORD');
+        } else {
+          // Autre erreur inattendue
+          setErrors({ email: error.message });
+          setEmailStatus('error');
+        }
+      } else if (data?.user && data.user.identities && data.user.identities.length === 0) {
+        // Supabase retourne un user avec identities vide = email déjà utilisé
         setEmailStatus('found');
         transitionTo('PASSWORD');
       } else {
-        // Toute autre erreur (user not found, etc.) = pas de compte
+        // Vrai nouvel utilisateur créé → on le supprime immédiatement (c'était juste un check)
+        // et on envoie vers inscription
+        if (data?.user) {
+          await supabase.auth.admin?.deleteUser?.(data.user.id).catch(() => {});
+          // Déconnecte la session fantôme créée par le signUp de check
+          await supabase.auth.signOut();
+        }
         setEmailStatus('notfound');
         transitionTo('REGISTER');
       }
