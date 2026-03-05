@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StatusBar, Platform, ActivityIndicator, ScrollView,
+  StatusBar, Platform, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView, Alert,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
@@ -41,11 +41,11 @@ function timeAgo(dateStr) {
   if (!dateStr) return null;
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
   if (diff < 60)   return `il y a ${diff}s`;
-  if (diff < 3600) return `il y a ${Math.floor(diff/60)}min`;
-  return `il y a ${Math.floor(diff/3600)}h`;
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)}min`;
+  return `il y a ${Math.floor(diff / 3600)}h`;
 }
 
-// ─── Modal réutilisable (Ajout + Modification) ─────────────
+// ─── Modal Ajout / Modification ───────────────────────────
 function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   const isEdit = !!initial;
   const [name,      setName]      = useState(initial?.name      ?? '');
@@ -54,32 +54,26 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   const [loading,   setLoading]   = useState(false);
 
   useEffect(() => {
-    setName(initial?.name ?? '');
-    setModel(initial?.model ?? '');
+    setName(initial?.name      ?? '');
+    setModel(initial?.model    ?? '');
     setReference(initial?.reference ?? '');
   }, [initial, visible]);
 
   const handleSave = async () => {
-    if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom est obligatoire.');
-      return;
-    }
+    if (!name.trim()) { Alert.alert('Erreur', 'Le nom est obligatoire.'); return; }
     setLoading(true);
     try {
       if (isEdit) {
-        const { error } = await supabase
-          .from('scooters')
+        const { error } = await supabase.from('scooters')
           .update({ name: name.trim(), model: model.trim(), reference: reference.trim() })
           .eq('id', initial.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('scooters')
+        const { error } = await supabase.from('scooters')
           .insert({ name: name.trim(), model: model.trim(), reference: reference.trim() });
         if (error) throw error;
       }
-      onSaved();
-      onClose();
+      onSaved(); onClose();
     } catch (err) {
       Alert.alert('Erreur', err.message);
     } finally {
@@ -92,13 +86,11 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
         <View style={{
-          backgroundColor: C.bgCard,
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28,
           padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
           borderTopWidth: 1, borderColor: C.border,
         }}>
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 24 }} />
-
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <Text style={{ fontSize: 22, fontWeight: '900', color: C.white, letterSpacing: -0.5 }}>
               {isEdit ? 'Modifier 🛵' : 'Nouveau 🛵'}
@@ -109,23 +101,19 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
             </TouchableOpacity>
           </View>
 
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Nom *</Text>
-          <TextInput value={name} onChangeText={setName} placeholder="ex: Scooter 1"
-            placeholderTextColor={C.textMuted}
-            style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16 }}
-          />
-
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Modèle</Text>
-          <TextInput value={model} onChangeText={setModel} placeholder="ex: Niu NQi GT Pro"
-            placeholderTextColor={C.textMuted}
-            style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16 }}
-          />
-
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Référence</Text>
-          <TextInput value={reference} onChangeText={setReference} placeholder="ex: SCT-001"
-            placeholderTextColor={C.textMuted}
-            style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 28 }}
-          />
+          {[
+            { label: 'Nom *',      value: name,      set: setName,      placeholder: 'ex: Scooter 1'     },
+            { label: 'Modèle',     value: model,     set: setModel,     placeholder: 'ex: Niu NQi GT Pro' },
+            { label: 'Référence',  value: reference, set: setReference, placeholder: 'ex: SCT-001'        },
+          ].map(({ label, value, set, placeholder }) => (
+            <View key={label}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>{label}</Text>
+              <TextInput value={value} onChangeText={set} placeholder={placeholder}
+                placeholderTextColor={C.textMuted}
+                style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16 }}
+              />
+            </View>
+          ))}
 
           <TouchableOpacity onPress={handleSave} disabled={loading} activeOpacity={0.8}
             style={{ backgroundColor: C.accent, borderRadius: 16, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
@@ -140,205 +128,51 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   );
 }
 
-// ─── Écran Détail ──────────────────────────────────────────
-function DetailScreen({ s, onBack, onDeleted, onEdited }) {
-  const [data,      setData]      = useState(s);
-  const [alarm,     setAlarm]     = useState(s.alarm);
-  const [starter,   setStarter]   = useState(s.starter);
-  const [showEdit,  setShowEdit]  = useState(false);
-  const sc = STATUS[data.status] ?? STATUS.offline;
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`telemetry-${s.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'telemetry',
-        filter: `scooter_id=eq.${s.id}`,
-      }, payload => setData(prev => ({ ...prev, ...payload.new })))
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [s.id]);
-
-  const handleAlarm = async () => {
-    const v = !alarm; setAlarm(v);
-    await supabase.from('telemetry').insert({ scooter_id: s.id, alarm: v, starter, battery: data.battery, status: data.status });
-  };
-
-  const handleStarter = async () => {
-    const v = !starter; setStarter(v);
-    await supabase.from('telemetry').insert({ scooter_id: s.id, starter: v, alarm, battery: data.battery, status: data.status });
-  };
-
-  const handleDelete = async () => {
-    Alert.alert(
-      'Supprimer ce scooter ?',
-      `"${data.name}" sera supprimé définitivement.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await supabase.from('telemetry').delete().eq('scooter_id', s.id);
-              await supabase.from('scooters').delete().eq('id', s.id);
-              onBack();
-              setTimeout(() => onDeleted(), 500);
-            } catch (err) {
-              Alert.alert('Erreur', err.message);
-            }
-          },
-        },
-      ],
-      { cancelable: true }
-    );
-  };
-
+// ─── Modal Déconnexion ─────────────────────────────────────
+function LogoutModal({ visible, onClose, onConfirm, loading }) {
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }}
-      contentContainerStyle={{ padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Barre haut */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <TouchableOpacity onPress={onBack}
-          style={{ backgroundColor: C.bgElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSecondary }}>← Retour</Text>
-        </TouchableOpacity>
-
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={() => setShowEdit(true)}
-            style={{ backgroundColor: C.bgElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>⚙️ Modifier</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleDelete}
-            style={{ backgroundColor: C.dangerDim, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.danger + '44' }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: C.danger }}>🗑️</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Hero */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-            paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1,
-            borderColor: sc.color + '44', backgroundColor: sc.bg, marginBottom: 8 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
-            <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>{sc.label}</Text>
-          </View>
-          <Text style={{ fontSize: 28, fontWeight: '900', color: C.white, letterSpacing: -1 }}>{data.name}</Text>
-          <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{data.model}</Text>
-          {data.reference ? (
-            <Text style={{ fontSize: 10, color: C.accent, marginTop: 4, fontWeight: '700' }}>#{data.reference}</Text>
-          ) : null}
-        </View>
-        <Text style={{ fontSize: 48 }}>🛵</Text>
-      </View>
-
-      {/* Mini stats — sans Vitesse */}
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
-        {[
-          { label: 'Batterie',  value: data.battery != null ? `${data.battery}%` : '—', color: battColor(data.battery) },
-          { label: 'Autonomie', value: data.range   != null ? `${data.range}km`  : '—', color: C.white },
-          { label: 'Temp',      value: data.temp    != null ? `${data.temp}°C`   : '—', color: C.white },
-        ].map(({ label, value, color }) => (
-          <View key={label} style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontWeight: '800', color, letterSpacing: -0.5 }}>{value}</Text>
-            <Text style={{ fontSize: 7, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 3 }}>{label}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* GPS */}
-      <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Localisation</Text>
-      <View style={{ backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.border, marginBottom: 20 }}>
-        <View style={{ height: 150, backgroundColor: '#13131A', justifyContent: 'center', alignItems: 'center' }}>
-          {data.status !== 'offline' ? (
-            <>
-              <View style={{ position: 'absolute', width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(0,229,255,0.05)', borderWidth: 1, borderColor: 'rgba(0,229,255,0.1)' }} />
-              <View style={{ position: 'absolute', width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(0,229,255,0.08)', borderWidth: 1.5, borderColor: C.borderAccent }} />
-              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.bgCard, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: C.accent }}>
-                <Text style={{ fontSize: 18 }}>🛵</Text>
-              </View>
-            </>
-          ) : (
-            <Text style={{ color: C.textMuted, fontSize: 12 }}>Hors ligne — GPS non disponible</Text>
-          )}
-          {data.address ? (
-            <View style={{ position: 'absolute', bottom: 10, left: 10, backgroundColor: C.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: C.bg }}>📍 {data.address}</Text>
-            </View>
-          ) : null}
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 8 }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: data.status !== 'offline' ? C.success : C.textMuted }} />
-          <Text style={{ flex: 1, fontSize: 11, color: C.textSecondary }}>
-            {data.last_update ? `Mis à jour ${timeAgo(data.last_update)}` : 'En attente du GPS…'}
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 32 }}
+        activeOpacity={1} onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1}
+          style={{ backgroundColor: C.bgCard, borderRadius: 24, padding: 28, width: '100%', borderWidth: 1, borderColor: C.border }}>
+          <Text style={{ fontSize: 28, textAlign: 'center', marginBottom: 12 }}>👋</Text>
+          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, textAlign: 'center', marginBottom: 8 }}>
+            Déconnexion
           </Text>
-        </View>
-      </View>
+          <Text style={{ fontSize: 13, color: C.textSecondary, textAlign: 'center', marginBottom: 28, lineHeight: 20 }}>
+            Vous allez être déconnecté de votre compte FlotteManager.
+          </Text>
 
-      {/* Contrôles */}
-      <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Contrôles</Text>
-      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
-        {[
-          { icon: '🔒', label: 'Alarme',    active: alarm,   onPress: handleAlarm,   statusOn: 'Armée',  statusOff: 'Désarmée' },
-          { icon: '⚡', label: 'Démarrage', active: starter, onPress: handleStarter, statusOn: 'Actif',  statusOff: 'Inactif'  },
-        ].map(({ icon, label, active, onPress, statusOn, statusOff }) => (
-          <TouchableOpacity key={label} onPress={onPress} activeOpacity={0.75}
-            style={{ flex: 1, backgroundColor: active ? '#1A1A26' : C.bgCard, borderRadius: 18, padding: 16,
-              alignItems: 'center', gap: 6, borderWidth: 1, borderColor: active ? C.borderAccent : C.border }}>
-            <Text style={{ fontSize: 24 }}>{icon}</Text>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: C.white }}>{label}</Text>
-            <Text style={{ fontSize: 10, color: active ? C.accent : C.textMuted }}>{active ? statusOn : statusOff}</Text>
-            <View style={{ width: 42, height: 24, borderRadius: 12, backgroundColor: active ? C.accent : C.bgElevated, padding: 3, justifyContent: 'center', marginTop: 4 }}>
-              <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: active ? C.bg : C.textMuted, alignSelf: active ? 'flex-end' : 'flex-start' }} />
-            </View>
+          <TouchableOpacity onPress={onConfirm} disabled={loading} activeOpacity={0.85}
+            style={{ backgroundColor: C.dangerDim, borderRadius: 14, padding: 14, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: C.danger + '55' }}>
+            {loading
+              ? <ActivityIndicator color={C.danger} />
+              : <Text style={{ fontSize: 14, fontWeight: '800', color: C.danger }}>Confirmer la déconnexion</Text>
+            }
           </TouchableOpacity>
-        ))}
-      </View>
 
-      {/* Stats en direct — sans Vitesse */}
-      <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Stats en direct</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {[
-          { icon: '🔋', value: data.battery, unit: '%',  label: 'BATTERIE' },
-          { icon: '🛣️', value: data.range,   unit: 'km', label: 'AUTONOMIE' },
-          { icon: '🌡️', value: data.temp,    unit: '°C', label: 'TEMPÉRATURE' },
-        ].map(({ icon, value, unit, label }) => (
-          <View key={label} style={{ width: '47.5%', backgroundColor: C.bgCard, borderRadius: 16, padding: 14,
-            borderWidth: 1, borderColor: C.border, minHeight: 110, justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 20 }}>{icon}</Text>
-            <Text style={{ fontSize: 32, fontWeight: '900', color: value == null ? C.textMuted : C.white, letterSpacing: -1.5 }}>
-              {value ?? '—'}{value != null && <Text style={{ fontSize: 12, color: C.textSecondary }}> {unit}</Text>}
-            </Text>
-            <Text style={{ fontSize: 8, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>{label}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={{ height: 40 }} />
-
-      <ScooterFormModal
-        visible={showEdit}
-        onClose={() => setShowEdit(false)}
-        initial={data}
-        onSaved={() => {
-          setShowEdit(false);
-          onEdited();
-        }}
-      />
-    </ScrollView>
+          <TouchableOpacity onPress={onClose} activeOpacity={0.8}
+            style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: C.textSecondary }}>Annuler</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   );
 }
 
-// ─── Écran Accueil ─────────────────────────────────────────
+// ─── Écran principal ───────────────────────────────────────
 export default function HomeScreen() {
-  const [scooters,  setScooters]  = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [selected,  setSelected]  = useState(null);
-  const [showAdd,   setShowAdd]   = useState(false);
+  const [scooters,     setScooters]     = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [selected,     setSelected]     = useState(null);
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [showLogout,   setShowLogout]   = useState(false);
+  const [logoutLoading,setLogoutLoading]= useState(false);
+  const [userEmail,    setUserEmail]    = useState('');
 
   const fetchScooters = async () => {
     const { data, error } = await supabase.from('scooters_live').select('*');
@@ -349,29 +183,38 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchScooters();
+
+    // Récupère l'email de l'utilisateur connecté
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data?.user?.email ?? '');
+    });
+
     const channel = supabase
       .channel('telemetry-all')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' }, () => fetchScooters())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' },
+        payload => setScooters(prev =>
+          prev.map(s => s.id === payload.new.scooter_id ? { ...s, ...payload.new } : s)
+        )
+      )
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, []);
 
-  if (selected) return (
-    <DetailScreen
-      s={selected}
-      onBack={() => setSelected(null)}
-      onDeleted={() => { fetchScooters(); setSelected(null); }}
-      onEdited={() => fetchScooters()}
-    />
-  );
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    await supabase.auth.signOut();
+    // App.js détecte onAuthStateChange → redirige vers AuthScreen auto
+    setLogoutLoading(false);
+    setShowLogout(false);
+  };
 
   const online   = scooters.filter(s => s.status !== 'offline').length;
   const charging = scooters.filter(s => s.status === 'charging').length;
-  const totalKm  = scooters.reduce((a, s) => a + (s.range ?? 0), 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={C.accent} />
@@ -385,29 +228,56 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={() => (
             <>
+              {/* ── Header avec déconnexion ── */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-                <View>
-                  <Text style={{ fontSize: 10, letterSpacing: 3, color: C.accent, textTransform: 'uppercase', marginBottom: 8 }}>Tableau de bord</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10, letterSpacing: 3, color: C.accent, textTransform: 'uppercase', marginBottom: 8 }}>
+                    Tableau de bord
+                  </Text>
                   <Text style={{ fontSize: 36, fontWeight: '900', color: C.white, letterSpacing: -1 }}>
                     Ma <Text style={{ color: C.accent }}>Flotte</Text>
                   </Text>
                   <Text style={{ fontSize: 12, color: C.textSecondary, marginTop: 6 }}>
                     {scooters.length} scooter{scooters.length > 1 ? 's' : ''}
                   </Text>
+                  {/* Email utilisateur */}
+                  {userEmail ? (
+                    <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>
+                      👤 {userEmail}
+                    </Text>
+                  ) : null}
                 </View>
-                <TouchableOpacity onPress={() => setShowAdd(true)} activeOpacity={0.8}
-                  style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: C.accent,
-                    justifyContent: 'center', alignItems: 'center',
-                    shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 }}>
-                  <Text style={{ fontSize: 26, color: C.bg, fontWeight: '300', lineHeight: 30 }}>+</Text>
-                </TouchableOpacity>
+
+                {/* Boutons droite */}
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  {/* Ajouter scooter */}
+                  <TouchableOpacity onPress={() => setShowAdd(true)} activeOpacity={0.8}
+                    style={{
+                      width: 48, height: 48, borderRadius: 16, backgroundColor: C.accent,
+                      justifyContent: 'center', alignItems: 'center',
+                      shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8,
+                    }}>
+                    <Text style={{ fontSize: 26, color: C.bg, fontWeight: '300', lineHeight: 30 }}>+</Text>
+                  </TouchableOpacity>
+
+                  {/* Déconnexion */}
+                  <TouchableOpacity onPress={() => setShowLogout(true)} activeOpacity={0.8}
+                    style={{
+                      width: 48, height: 48, borderRadius: 16,
+                      backgroundColor: C.dangerDim,
+                      borderWidth: 1, borderColor: C.danger + '44',
+                      justifyContent: 'center', alignItems: 'center',
+                    }}>
+                    <Text style={{ fontSize: 18 }}>🚪</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
+              {/* Stats globales */}
               <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
                 {[
-                  { value: online,   color: C.success, label: 'En ligne' },
+                  { value: online,   color: C.success, label: 'En ligne'  },
                   { value: charging, color: C.warning, label: 'En charge' },
-      
                 ].map(({ value, color, label }) => (
                   <View key={label} style={{ flex: 1, backgroundColor: C.bgCard, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
                     <Text style={{ fontSize: 22, fontWeight: '900', color, letterSpacing: -1 }}>{value}</Text>
@@ -415,9 +285,11 @@ export default function HomeScreen() {
                   </View>
                 ))}
               </View>
+
               <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 14 }}>Appareils</Text>
             </>
           )}
+
           renderItem={({ item }) => {
             const sc = STATUS[item.status] ?? STATUS.offline;
             return (
@@ -436,7 +308,6 @@ export default function HomeScreen() {
                   </View>
                 </View>
 
-                {/* Cards — sans km/h */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
                     <Text style={{ fontSize: 15, fontWeight: '700', color: battColor(item.battery) }}>
@@ -447,7 +318,6 @@ export default function HomeScreen() {
                       <View style={{ height: '100%', borderRadius: 2, width: `${item.battery ?? 0}%`, backgroundColor: battColor(item.battery) }} />
                     </View>
                   </View>
-                  
                 </View>
 
                 <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 12 }}>
@@ -456,15 +326,28 @@ export default function HomeScreen() {
               </TouchableOpacity>
             );
           }}
+
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           ListFooterComponent={() => <View style={{ height: 40 }} />}
+          ListEmptyComponent={() => (
+            <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+              <Text style={{ fontSize: 48, marginBottom: 16 }}>🛵</Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: C.white, marginBottom: 8 }}>Aucun scooter</Text>
+              <Text style={{ fontSize: 13, color: C.textMuted, textAlign: 'center' }}>
+                Appuyez sur + pour ajouter votre premier scooter
+              </Text>
+            </View>
+          )}
         />
       )}
 
-      <ScooterFormModal
-        visible={showAdd}
-        onClose={() => setShowAdd(false)}
-        onSaved={fetchScooters}
+      <ScooterFormModal visible={showAdd} onClose={() => setShowAdd(false)} onSaved={fetchScooters} />
+
+      <LogoutModal
+        visible={showLogout}
+        onClose={() => setShowLogout(false)}
+        onConfirm={handleLogout}
+        loading={logoutLoading}
       />
     </View>
   );
