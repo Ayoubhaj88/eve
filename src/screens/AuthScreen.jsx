@@ -16,7 +16,6 @@ const C = {
   successDim:   'rgba(0,230,118,0.10)',
   danger:       '#FF1744',
   dangerDim:    'rgba(255,23,68,0.10)',
-  warning:      '#FFB300',
   white:        '#FFFFFF',
   textSecondary:'#8A8A9A',
   textMuted:    '#4A4A5A',
@@ -24,35 +23,71 @@ const C = {
   borderAccent: 'rgba(0,229,255,0.25)',
 };
 
+// ─── Erreurs Supabase → message lisible ───────────────────
+function parseError(msg) {
+  if (!msg) return 'Une erreur est survenue';
+  if (msg.includes('Invalid login credentials'))   return '❌ Email ou mot de passe incorrect';
+  if (msg.includes('Email not confirmed'))         return '📧 Vérifiez votre email pour confirmer votre compte';
+  if (msg.includes('User already registered'))     return '⚠️ Cet email est déjà utilisé — connectez-vous';
+  if (msg.includes('Password should be'))          return '🔑 Mot de passe trop court (min. 6 caractères)';
+  if (msg.includes('Unable to validate'))          return '❌ Email ou mot de passe incorrect';
+  if (msg.includes('rate limit'))                  return '⏳ Trop de tentatives, attendez quelques secondes';
+  return msg;
+}
+
+// ─── Barre force mot de passe ─────────────────────────────
+function PasswordStrength({ password }) {
+  if (!password || password.length < 2) return null;
+  let score = 0;
+  if (password.length >= 6)              score++;
+  if (password.length >= 10)             score++;
+  if (/[A-Z]/.test(password))            score++;
+  if (/[0-9]/.test(password))            score++;
+  if (/[^A-Za-z0-9]/.test(password))    score++;
+
+  const clamp   = Math.min(score, 4);
+  const colors  = ['', C.danger, '#FFB300', C.accent, C.success];
+  const labels  = ['', 'Faible', 'Moyen', 'Bon', 'Fort'];
+
+  return (
+    <View style={{ marginBottom: 14, marginTop: -4 }}>
+      <View style={{ flexDirection: 'row', gap: 4, marginBottom: 5 }}>
+        {[1,2,3,4].map(i => (
+          <View key={i} style={{
+            flex: 1, height: 3, borderRadius: 2,
+            backgroundColor: i <= clamp ? colors[clamp] : C.bgElevated,
+          }} />
+        ))}
+      </View>
+      <Text style={{ fontSize: 10, fontWeight: '700', color: colors[clamp], letterSpacing: 0.5 }}>
+        {labels[clamp]}
+      </Text>
+    </View>
+  );
+}
+
 // ─── Input animé ──────────────────────────────────────────
-function Field({ label, icon, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, editable = true, hint, error }) {
-  const [focused, setFocused] = useState(false);
+function Field({ label, icon, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, error }) {
   const borderAnim = useRef(new Animated.Value(0)).current;
 
-  const onFocus = () => {
-    setFocused(true);
-    Animated.timing(borderAnim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
-  };
-  const onBlur = () => {
-    setFocused(false);
-    Animated.timing(borderAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
-  };
-
   const borderColor = borderAnim.interpolate({
-    inputRange: [0, 1],
+    inputRange:  [0, 1],
     outputRange: [error ? C.danger : C.border, error ? C.danger : C.accent],
   });
 
   return (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontSize: 10, fontWeight: '800', color: error ? C.danger : C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+    <View style={{ marginBottom: error ? 6 : 16 }}>
+      <Text style={{
+        fontSize: 10, fontWeight: '800',
+        color: error ? C.danger : C.textMuted,
+        textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8,
+      }}>
         {label}
       </Text>
       <Animated.View style={{
         flexDirection: 'row', alignItems: 'center',
-        backgroundColor: editable ? C.bgElevated : C.bgCard,
-        borderRadius: 14, borderWidth: 1, borderColor,
-        paddingHorizontal: 14, opacity: editable ? 1 : 0.55,
+        backgroundColor: C.bgElevated, borderRadius: 14,
+        borderWidth: 1, borderColor, paddingHorizontal: 14,
       }}>
         <Text style={{ fontSize: 16, marginRight: 10 }}>{icon}</Text>
         <TextInput
@@ -63,95 +98,35 @@ function Field({ label, icon, value, onChangeText, placeholder, secureTextEntry,
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType ?? 'default'}
           autoCapitalize={autoCapitalize ?? 'none'}
-          editable={editable}
-          onFocus={onFocus}
-          onBlur={onBlur}
+          onFocus={() => Animated.timing(borderAnim, { toValue: 1, duration: 180, useNativeDriver: false }).start()}
+          onBlur={()  => Animated.timing(borderAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start()}
           style={{ flex: 1, color: C.white, fontSize: 15, paddingVertical: 14 }}
         />
-        {error
-          ? <Text style={{ fontSize: 13 }}>⚠️</Text>
-          : value && focused
-            ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent }} />
-            : null
-        }
       </Animated.View>
-      {(hint || error) && (
-        <Text style={{ fontSize: 11, color: error ? C.danger : C.textMuted, marginTop: 5, marginLeft: 2 }}>
-          {error || hint}
-        </Text>
+      {error && (
+        <Text style={{ fontSize: 11, color: C.danger, marginTop: 5, marginLeft: 2 }}>{error}</Text>
       )}
     </View>
   );
 }
 
-// ─── Badge statut email ───────────────────────────────────
-function EmailBadge({ status }) {
-  const map = {
-    found:    { icon: '✓', label: 'Compte existant — connectez-vous', color: C.success, bg: C.successDim },
-    notfound: { icon: '✦', label: 'Nouvel utilisateur — créez un compte', color: C.accent, bg: C.accentDim },
-    error:    { icon: '✕', label: 'Email invalide', color: C.danger, bg: C.dangerDim },
-  };
-  const c = map[status];
-  if (!c) return null;
-  return (
-    <View style={{
-      flexDirection: 'row', alignItems: 'center', gap: 7,
-      alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6,
-      borderRadius: 20, backgroundColor: c.bg,
-      borderWidth: 1, borderColor: c.color + '55', marginBottom: 18,
-    }}>
-      <Text style={{ fontSize: 10, fontWeight: '900', color: c.color }}>{c.icon}</Text>
-      <Text style={{ fontSize: 11, fontWeight: '700', color: c.color }}>{c.label}</Text>
-    </View>
-  );
-}
-
-// ─── Indicateur force mot de passe ───────────────────────
-function PasswordStrength({ password }) {
-  if (!password) return null;
-  let score = 0;
-  if (password.length >= 8)        score++;
-  if (/[A-Z]/.test(password))      score++;
-  if (/[0-9]/.test(password))      score++;
-  if (/[^A-Za-z0-9]/.test(password)) score++;
-
-  const colors = [C.danger, C.danger, C.warning, C.accent, C.success];
-  const labels = ['', 'Très faible', 'Faible', 'Moyen', 'Fort'];
-
-  return (
-    <View style={{ marginTop: -6, marginBottom: 14 }}>
-      <View style={{ flexDirection: 'row', gap: 4, marginBottom: 5 }}>
-        {[1,2,3,4].map(i => (
-          <View key={i} style={{
-            flex: 1, height: 3, borderRadius: 2,
-            backgroundColor: i <= score ? colors[score] : C.bgElevated,
-          }} />
-        ))}
-      </View>
-      <Text style={{ fontSize: 10, fontWeight: '700', color: colors[score], letterSpacing: 0.5 }}>
-        {labels[score]}
-      </Text>
-    </View>
-  );
-}
-
-// ─── Screen principal ─────────────────────────────────────
+// ─── Screen ───────────────────────────────────────────────
 export default function AuthScreen() {
-  // STEPS: EMAIL → PASSWORD (compte trouvé) ou REGISTER (pas de compte) ou FORGOT
-  const [step,        setStep]        = useState('EMAIL');
+  const [mode,        setMode]        = useState('login');   // 'login' | 'register'
   const [email,       setEmail]       = useState('');
   const [password,    setPassword]    = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [fullName,    setFullName]    = useState('');
-  const [emailStatus, setEmailStatus] = useState(null);
   const [loading,     setLoading]     = useState(false);
+  const [globalError, setGlobalError] = useState('');
   const [errors,      setErrors]      = useState({});
   const [resetSent,   setResetSent]   = useState(false);
+  const [showForgot,  setShowForgot]  = useState(false);
 
-  // Animations globales
+  // Animations
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
-  const cardFade  = useRef(new Animated.Value(1)).current;
+  const tabAnim   = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -160,93 +135,49 @@ export default function AuthScreen() {
     ]).start();
   }, []);
 
-  const transitionTo = (nextStep) => {
-    Animated.sequence([
-      Animated.timing(cardFade, { toValue: 0, duration: 130, useNativeDriver: true }),
-      Animated.timing(cardFade, { toValue: 1, duration: 220, useNativeDriver: true }),
-    ]).start();
-    setTimeout(() => setStep(nextStep), 130);
-  };
-
-  const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
-
-  // ── STEP 1 : Check email ──────────────────────────────
-  const handleCheckEmail = async () => {
+  const switchMode = (m) => {
+    Animated.timing(tabAnim, { toValue: m === 'login' ? 0 : 1, duration: 220, useNativeDriver: false }).start();
+    setMode(m);
     setErrors({});
-    if (!isValidEmail(email)) {
-      setErrors({ email: 'Adresse email invalide' });
-      setEmailStatus('error');
-      return;
-    }
-    setLoading(true);
-    try {
-      // Tente une inscription avec un faux mot de passe fort
-      // Si l'email existe déjà → Supabase retourne "User already registered"
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password: 'Chk_' + Math.random().toString(36) + '_!9Z',
-      });
-
-      if (error) {
-        if (
-          error.message.toLowerCase().includes('already registered') ||
-          error.message.toLowerCase().includes('already exists') ||
-          error.message.toLowerCase().includes('user already')
-        ) {
-          // Compte trouvé
-          setEmailStatus('found');
-          transitionTo('PASSWORD');
-        } else {
-          // Autre erreur inattendue
-          setErrors({ email: error.message });
-          setEmailStatus('error');
-        }
-      } else if (data?.user && data.user.identities && data.user.identities.length === 0) {
-        // Supabase retourne un user avec identities vide = email déjà utilisé
-        setEmailStatus('found');
-        transitionTo('PASSWORD');
-      } else {
-        // Vrai nouvel utilisateur créé → on le supprime immédiatement (c'était juste un check)
-        // et on envoie vers inscription
-        if (data?.user) {
-          await supabase.auth.admin?.deleteUser?.(data.user.id).catch(() => {});
-          // Déconnecte la session fantôme créée par le signUp de check
-          await supabase.auth.signOut();
-        }
-        setEmailStatus('notfound');
-        transitionTo('REGISTER');
-      }
-    } catch {
-      setEmailStatus('notfound');
-      transitionTo('REGISTER');
-    } finally {
-      setLoading(false);
-    }
+    setGlobalError('');
+    setPassword('');
+    setConfirmPass('');
   };
 
-  // ── STEP 2 : Login ────────────────────────────────────
+  // ── LOGIN ─────────────────────────────────────────────
   const handleLogin = async () => {
-    setErrors({});
-    if (!password) { setErrors({ password: 'Mot de passe requis' }); return; }
+    setErrors({}); setGlobalError('');
+    const errs = {};
+    if (!email.trim())    errs.email    = 'Email requis';
+    if (!password)        errs.password = 'Mot de passe requis';
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
-        setErrors({ password: error.message.includes('Invalid login credentials') ? 'Mot de passe incorrect' : error.message });
+        // Si "already registered" → suggère de passer en login
+        if (error.message.includes('User already registered')) {
+          setGlobalError('');
+          switchMode('login');
+        } else {
+          setGlobalError(parseError(error.message));
+        }
       }
-      // Succès → App.js redirect auto via onAuthStateChange
+      // Succès → App.js redirige automatiquement
     } finally {
       setLoading(false);
     }
   };
 
-  // ── STEP 3 : Register ─────────────────────────────────
+  // ── REGISTER ──────────────────────────────────────────
   const handleRegister = async () => {
-    setErrors({});
+    setErrors({}); setGlobalError('');
     const errs = {};
-    if (!fullName.trim())          errs.fullName    = 'Nom requis';
-    if (password.length < 8)       errs.password    = 'Minimum 8 caractères';
-    if (password !== confirmPass)  errs.confirmPass = 'Les mots de passe ne correspondent pas';
+    if (!fullName.trim())         errs.fullName    = 'Nom requis';
+    if (!email.trim())            errs.email       = 'Email requis';
+    if (password.length < 6)      errs.password    = 'Minimum 6 caractères';
+    if (password !== confirmPass) errs.confirmPass = 'Les mots de passe ne correspondent pas';
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
     setLoading(true);
@@ -255,50 +186,44 @@ export default function AuthScreen() {
         email: email.trim(), password,
         options: { data: { full_name: fullName.trim() } },
       });
-      if (error) throw error;
-      // Succès → App.js redirect auto
-    } catch (err) {
-      setErrors({ general: err.message });
+      if (error) {
+        if (error.message.includes('User already registered')) {
+          // Compte existant → bascule automatiquement sur login
+          setGlobalError('');
+          switchMode('login');
+          setGlobalError('✅ Compte existant détecté — connectez-vous ci-dessous');
+        } else {
+          setGlobalError(parseError(error.message));
+        }
+      }
+      // Succès → App.js redirige automatiquement
     } finally {
       setLoading(false);
     }
   };
 
-  // ── STEP 4 : Forgot password ──────────────────────────
+  // ── FORGOT PASSWORD ───────────────────────────────────
   const handleForgot = async () => {
+    if (!email.trim()) { setErrors({ email: 'Entrez votre email d\'abord' }); return; }
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-      if (error) throw error;
-      setResetSent(true);
-    } catch (err) {
-      setErrors({ general: err.message });
+      if (error) setGlobalError(parseError(error.message));
+      else setResetSent(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const goBackToEmail = () => {
-    transitionTo('EMAIL');
-    setPassword(''); setConfirmPass(''); setFullName('');
-    setErrors({}); setEmailStatus(null); setResetSent(false);
-  };
-
-  const stepConfig = {
-    EMAIL:    { title: 'Bienvenue 👋',        sub: 'Entrez votre email pour continuer',   btn: 'Continuer →',        action: handleCheckEmail },
-    PASSWORD: { title: 'Bon retour 🔐',       sub: `Connexion en tant que`,               btn: 'Se connecter →',     action: handleLogin      },
-    REGISTER: { title: 'Nouveau compte ✨',   sub: `Aucun compte pour`,                   btn: 'Créer mon compte →', action: handleRegister   },
-    FORGOT:   { title: 'Mot de passe oublié', sub: 'Un lien sera envoyé à',               btn: 'Envoyer le lien →',  action: handleForgot     },
-  };
-  const current = stepConfig[step];
+  const tabIndicatorLeft = tabAnim.interpolate({ inputRange: [0, 1], outputRange: ['2%', '52%'] });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      {/* Déco */}
-      <View style={{ position: 'absolute', top: -100, right: -60, width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(0,229,255,0.035)' }} />
-      <View style={{ position: 'absolute', bottom: -80, left: -80, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(0,229,255,0.02)' }} />
+      {/* Déco bg */}
+      <View style={{ position: 'absolute', top: -100, right: -60,  width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(0,229,255,0.035)' }} />
+      <View style={{ position: 'absolute', bottom: -80, left: -80, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(0,229,255,0.02)'  }} />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView
@@ -314,7 +239,8 @@ export default function AuthScreen() {
                 width: 76, height: 76, borderRadius: 22,
                 backgroundColor: C.bgCard, borderWidth: 1.5, borderColor: C.borderAccent,
                 justifyContent: 'center', alignItems: 'center', marginBottom: 16,
-                shadowColor: C.accent, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
+                shadowColor: C.accent, shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
               }}>
                 <Text style={{ fontSize: 38 }}>🛵</Text>
               </View>
@@ -323,130 +249,137 @@ export default function AuthScreen() {
               </Text>
             </View>
 
-            {/* Progress dots */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 28 }}>
-              {['EMAIL', step === 'FORGOT' ? 'FORGOT' : emailStatus === 'found' ? 'PASSWORD' : 'REGISTER'].map((s, i) => (
-                <View key={i} style={{
-                  height: 3, borderRadius: 2,
-                  width: step === s ? 24 : 8,
-                  backgroundColor: step === s || (i === 0 && step !== 'EMAIL') ? C.accent : C.bgElevated,
-                }} />
+            {/* Tabs */}
+            <View style={{
+              flexDirection: 'row', backgroundColor: C.bgCard,
+              borderRadius: 16, padding: 4, marginBottom: 24,
+              borderWidth: 1, borderColor: C.border, position: 'relative',
+            }}>
+              {/* Indicateur glissant */}
+              <Animated.View style={{
+                position: 'absolute', top: 4, bottom: 4,
+                width: '46%', borderRadius: 12,
+                backgroundColor: C.bgElevated,
+                borderWidth: 1, borderColor: C.borderAccent,
+                left: tabIndicatorLeft,
+              }} />
+              {['login', 'register'].map(m => (
+                <TouchableOpacity key={m} onPress={() => switchMode(m)} activeOpacity={0.7}
+                  style={{ flex: 1, paddingVertical: 11, alignItems: 'center', zIndex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: mode === m ? C.white : C.textMuted }}>
+                    {m === 'login' ? '🔐 Connexion' : '✨ Inscription'}
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
 
             {/* Card */}
-            <Animated.View style={{
+            <View style={{
               backgroundColor: C.bgCard, borderRadius: 24, padding: 24,
               borderWidth: 1, borderColor: C.border, marginBottom: 16,
-              opacity: cardFade,
             }}>
-              {/* Titre + sous-titre */}
-              <Text style={{ fontSize: 24, fontWeight: '900', color: C.white, letterSpacing: -0.8, marginBottom: 4 }}>
-                {current.title}
-              </Text>
-              <Text style={{ fontSize: 12, color: C.textSecondary, marginBottom: 22, lineHeight: 18 }}>
-                {current.sub}{step !== 'EMAIL' ? <Text style={{ color: C.accent, fontWeight: '700' }}> {email}</Text> : null}
-              </Text>
 
-              {/* Badge email */}
-              <EmailBadge status={emailStatus} />
-
-              {/* Erreur générale */}
-              {errors.general && (
-                <View style={{ backgroundColor: C.dangerDim, borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: C.danger + '44' }}>
-                  <Text style={{ fontSize: 12, color: C.danger, fontWeight: '600' }}>⚠️  {errors.general}</Text>
+              {/* Erreur globale */}
+              {globalError ? (
+                <View style={{
+                  backgroundColor: globalError.startsWith('✅') ? C.successDim : C.dangerDim,
+                  borderRadius: 12, padding: 12, marginBottom: 16,
+                  borderWidth: 1, borderColor: (globalError.startsWith('✅') ? C.success : C.danger) + '44',
+                }}>
+                  <Text style={{ fontSize: 12, color: globalError.startsWith('✅') ? C.success : C.danger, fontWeight: '600', lineHeight: 18 }}>
+                    {globalError}
+                  </Text>
                 </View>
-              )}
+              ) : null}
 
               {/* Reset envoyé */}
               {resetSent && (
-                <View style={{ backgroundColor: C.successDim, borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: C.success + '44' }}>
+                <View style={{ backgroundColor: C.successDim, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: C.success + '44' }}>
                   <Text style={{ fontSize: 13, color: C.success, fontWeight: '700', marginBottom: 3 }}>📧 Email envoyé !</Text>
                   <Text style={{ fontSize: 12, color: C.success, opacity: 0.8 }}>Vérifiez votre boîte mail pour réinitialiser votre mot de passe.</Text>
                 </View>
               )}
 
-              {/* ── EMAIL ── */}
-              {step === 'EMAIL' && (
-                <Field label="Adresse email" icon="✉️"
-                  value={email} onChangeText={v => { setEmail(v); setErrors({}); setEmailStatus(null); }}
-                  placeholder="vous@exemple.com"
-                  keyboardType="email-address"
-                  error={errors.email}
+              {/* Champ nom (register seulement) */}
+              {mode === 'register' && (
+                <Field label="Nom complet" icon="👤"
+                  value={fullName} onChangeText={v => { setFullName(v); setErrors(e => ({...e, fullName: null})); }}
+                  placeholder="ex: Ahmed Ben Ali" autoCapitalize="words"
+                  error={errors.fullName}
                 />
               )}
 
-              {/* ── PASSWORD ── */}
-              {step === 'PASSWORD' && (
-                <>
-                  <Field label="Email" icon="✉️" value={email} editable={false} />
-                  <Field label="Mot de passe" icon="🔑"
-                    value={password} onChangeText={v => { setPassword(v); setErrors({}); }}
-                    placeholder="••••••••" secureTextEntry
-                    error={errors.password}
-                  />
-                  <TouchableOpacity onPress={() => transitionTo('FORGOT')} style={{ alignSelf: 'flex-end', marginTop: -6, marginBottom: 20 }}>
-                    <Text style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>Mot de passe oublié ?</Text>
+              {/* Email */}
+              <Field label="Adresse email" icon="✉️"
+                value={email} onChangeText={v => { setEmail(v); setErrors(e => ({...e, email: null})); setGlobalError(''); }}
+                placeholder="vous@exemple.com" keyboardType="email-address"
+                error={errors.email}
+              />
+
+              {/* Mot de passe */}
+              <Field label="Mot de passe" icon="🔑"
+                value={password} onChangeText={v => { setPassword(v); setErrors(e => ({...e, password: null})); }}
+                placeholder={mode === 'login' ? '••••••••' : 'Minimum 6 caractères'}
+                secureTextEntry
+                error={errors.password}
+              />
+              {mode === 'register' && <PasswordStrength password={password} />}
+
+              {/* Confirmer mdp (register) */}
+              {mode === 'register' && (
+                <Field label="Confirmer mot de passe" icon="🔒"
+                  value={confirmPass} onChangeText={v => { setConfirmPass(v); setErrors(e => ({...e, confirmPass: null})); }}
+                  placeholder="Répétez le mot de passe" secureTextEntry
+                  error={errors.confirmPass}
+                />
+              )}
+
+              {/* Mot de passe oublié */}
+              {mode === 'login' && (
+                <TouchableOpacity onPress={() => setShowForgot(v => !v)}
+                  style={{ alignSelf: 'flex-end', marginTop: -8, marginBottom: 20 }}>
+                  <Text style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>
+                    Mot de passe oublié ?
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Section forgot password inline */}
+              {showForgot && mode === 'login' && !resetSent && (
+                <View style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: C.border }}>
+                  <Text style={{ fontSize: 12, color: C.textSecondary, marginBottom: 10 }}>
+                    Un lien de réinitialisation sera envoyé à votre email.
+                  </Text>
+                  <TouchableOpacity onPress={handleForgot} disabled={loading}
+                    style={{ backgroundColor: C.bgCard, borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: C.borderAccent }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: C.accent }}>
+                      {loading ? '...' : 'Envoyer le lien de réinitialisation'}
+                    </Text>
                   </TouchableOpacity>
-                </>
-              )}
-
-              {/* ── REGISTER ── */}
-              {step === 'REGISTER' && (
-                <>
-                  <Field label="Email" icon="✉️" value={email} editable={false} />
-                  <Field label="Nom complet" icon="👤"
-                    value={fullName} onChangeText={v => { setFullName(v); setErrors({}); }}
-                    placeholder="ex: Ahmed Ben Ali" autoCapitalize="words"
-                    error={errors.fullName}
-                  />
-                  <Field label="Mot de passe" icon="🔑"
-                    value={password} onChangeText={v => { setPassword(v); setErrors({}); }}
-                    placeholder="Minimum 8 caractères" secureTextEntry
-                    error={errors.password}
-                    hint={!errors.password ? 'Majuscules, chiffres et symboles recommandés' : null}
-                  />
-                  <PasswordStrength password={password} />
-                  <Field label="Confirmer mot de passe" icon="🔒"
-                    value={confirmPass} onChangeText={v => { setConfirmPass(v); setErrors({}); }}
-                    placeholder="Répétez le mot de passe" secureTextEntry
-                    error={errors.confirmPass}
-                  />
-                </>
-              )}
-
-              {/* ── FORGOT ── */}
-              {step === 'FORGOT' && !resetSent && (
-                <Field label="Email" icon="✉️" value={email} editable={false} />
+                </View>
               )}
 
               {/* Bouton principal */}
-              {!resetSent && (
-                <TouchableOpacity
-                  onPress={current.action}
-                  disabled={loading}
-                  activeOpacity={0.85}
-                  style={{
-                    backgroundColor: C.accent, borderRadius: 16, paddingVertical: 16,
-                    alignItems: 'center', opacity: loading ? 0.7 : 1,
-                    shadowColor: C.accent, shadowOffset: { width: 0, height: 6 },
-                    shadowOpacity: 0.3, shadowRadius: 14, elevation: 8,
-                  }}
-                >
-                  {loading
-                    ? <ActivityIndicator color={C.bg} />
-                    : <Text style={{ fontSize: 15, fontWeight: '900', color: C.bg, letterSpacing: 0.3 }}>{current.btn}</Text>
-                  }
-                </TouchableOpacity>
-              )}
-
-              {/* Retour */}
-              {step !== 'EMAIL' && (
-                <TouchableOpacity onPress={goBackToEmail} style={{ alignItems: 'center', marginTop: 14 }}>
-                  <Text style={{ fontSize: 12, color: C.textMuted, fontWeight: '600' }}>← Utiliser un autre email</Text>
-                </TouchableOpacity>
-              )}
-            </Animated.View>
+              <TouchableOpacity
+                onPress={mode === 'login' ? handleLogin : handleRegister}
+                disabled={loading}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: C.accent, borderRadius: 16, paddingVertical: 16,
+                  alignItems: 'center', opacity: loading ? 0.7 : 1,
+                  shadowColor: C.accent, shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.3, shadowRadius: 14, elevation: 8,
+                  marginTop: mode === 'register' ? 4 : 0,
+                }}
+              >
+                {loading
+                  ? <ActivityIndicator color={C.bg} />
+                  : <Text style={{ fontSize: 15, fontWeight: '900', color: C.bg, letterSpacing: 0.3 }}>
+                      {mode === 'login' ? 'Se connecter →' : 'Créer mon compte →'}
+                    </Text>
+                }
+              </TouchableOpacity>
+            </View>
 
             {/* Footer */}
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 }}>
