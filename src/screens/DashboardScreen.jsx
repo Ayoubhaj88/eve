@@ -1,35 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, StatusBar, Platform,
 } from 'react-native';
-import { C, STATUS, battColor } from '../constants';
 
-// ─── Sub-components ───────────────────────────────────────
+// ─── Constantes ───────────────────────────────────────────
+const C = {
+  bg:           '#0A0A0F',
+  bgCard:       '#13131A',
+  bgElevated:   '#1E1E2E',
+  accent:       '#00E5FF',
+  success:      '#00E676',
+  successDim:   'rgba(0,230,118,0.12)',
+  warning:      '#FFB300',
+  warningDim:   'rgba(255,179,0,0.12)',
+  danger:       '#FF1744',
+  dangerDim:    'rgba(255,23,68,0.12)',
+  white:        '#FFFFFF',
+  textSecondary:'#8A8A9A',
+  textMuted:    '#4A4A5A',
+  border:       '#1E1E2E',
+};
 
-function StatCard({ icon, value, unit, label, badge, badgeColor }) {
+const STATUS = {
+  online:   { color: C.success,   bg: C.successDim,  label: 'En ligne'   },
+  offline:  { color: C.textMuted, bg: 'transparent', label: 'Hors ligne' },
+  charging: { color: C.warning,   bg: C.warningDim,  label: 'En charge'  },
+};
+
+function battColor(v) {
+  if (v == null) return C.textMuted;
+  if (v > 50)   return C.success;
+  if (v > 20)   return C.warning;
+  return C.danger;
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return null;
+  const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (diff < 60)    return `il y a ${diff}s`;
+  if (diff < 3600)  return `il y a ${Math.floor(diff / 60)}min`;
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`;
+  return `il y a ${Math.floor(diff / 86400)}j`;
+}
+
+// ─── Barre batterie ───────────────────────────────────────
+function BatteryBar({ value }) {
+  const color = battColor(value);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      <View style={{
+        width: 52, height: 12, borderRadius: 3,
+        borderWidth: 1.5, borderColor: color + '88',
+        backgroundColor: C.bgElevated, overflow: 'hidden', padding: 2,
+      }}>
+        <View style={{
+          width: value != null ? `${value}%` : '0%',
+          height: '100%', borderRadius: 1.5, backgroundColor: color,
+        }} />
+      </View>
+      <View style={{ width: 3, height: 6, borderRadius: 1, backgroundColor: color + '99' }} />
+    </View>
+  );
+}
+
+// ─── Card stat ────────────────────────────────────────────
+function StatCard({ icon, label, value, unit, color }) {
   return (
     <View style={styles.statCard}>
-      <View style={styles.statTop}>
-        <Text style={styles.statIcon}>{icon}</Text>
-        {badge && (
-          <View style={[styles.badge, { borderColor: badgeColor, backgroundColor: badgeColor + '22' }]}>
-            <Text style={[styles.badgeText, { color: badgeColor }]}>{badge}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.statValue, value == null && styles.statEmpty]}>
+      <Text style={styles.statIcon}>{icon}</Text>
+      <Text style={[styles.statValue, { color: color ?? C.white }]}>
         {value ?? '—'}
-        {value != null && <Text style={styles.statUnit}> {unit}</Text>}
+        {value != null && unit
+          ? <Text style={styles.statUnit}> {unit}</Text>
+          : null}
       </Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
+// ─── Toggle ───────────────────────────────────────────────
 function ToggleCard({ icon, label, status, active, onPress }) {
   return (
-    <TouchableOpacity style={[styles.toggleCard, active && styles.toggleCardOn]} onPress={onPress} activeOpacity={0.75}>
+    <TouchableOpacity
+      style={[styles.toggleCard, active && styles.toggleCardOn]}
+      onPress={onPress} activeOpacity={0.75}
+    >
       <Text style={styles.toggleIcon}>{icon}</Text>
       <Text style={styles.toggleLabel}>{label}</Text>
       <Text style={[styles.toggleStatus, active && { color: C.accent }]}>{status}</Text>
@@ -40,6 +98,7 @@ function ToggleCard({ icon, label, status, active, onPress }) {
   );
 }
 
+// ─── Map ─────────────────────────────────────────────────
 function MapCard({ address, lastUpdate, connected }) {
   return (
     <View style={styles.mapCard}>
@@ -54,16 +113,18 @@ function MapCard({ address, lastUpdate, connected }) {
           <View style={styles.pin}>
             <View style={styles.pinPulse} />
             <View style={styles.pinRing} />
-            <View style={styles.pinCore}><Text style={{ fontSize: 18 }}>🛵</Text></View>
+            <View style={styles.pinCore}>
+              <Text style={{ fontSize: 18 }}>🛵</Text>
+            </View>
           </View>
         ) : (
           <Text style={styles.offlineText}>Hors ligne — GPS non disponible</Text>
         )}
-        {address && (
+        {address ? (
           <View style={styles.locationChip}>
             <Text style={styles.chipText}>📍 {address}</Text>
           </View>
-        )}
+        ) : null}
       </View>
       <View style={styles.mapFooter}>
         <View style={[styles.dot, { backgroundColor: connected ? C.success : C.textMuted }]} />
@@ -80,75 +141,190 @@ function MapCard({ address, lastUpdate, connected }) {
   );
 }
 
-// ─── Screen ───────────────────────────────────────────────
+// ─── Screen principal ─────────────────────────────────────
 export default function DashboardScreen({ route, navigation }) {
-  const s = route.params?.scooter;
-  const [alarm,   setAlarm]   = useState(s?.alarm   ?? false);
-  const [starter, setStarter] = useState(s?.starter ?? false);
+  const scooter = route.params?.scooter;
 
-  if (!s) return null;
+  // ── État telemetry — colonnes exactes de ta table Supabase ──
+  const [tel, setTel] = useState({
+    battery:     scooter?.battery     ?? null,   // int4
+    charging:    scooter?.charging    ?? false,  // bool
+    speed:       scooter?.speed       ?? null,   // float8
+    range:       scooter?.range       ?? null,   // float8
+    temp:        scooter?.temp        ?? null,   // float8
+    latitude:    scooter?.latitude    ?? null,   // float8
+    longitude:   scooter?.longitude   ?? null,   // float8
+    address:     scooter?.address     ?? null,   // text
+    alarm:       scooter?.alarm       ?? false,  // bool
+    starter:     scooter?.starter     ?? false,  // bool
+    status:      scooter?.status      ?? 'offline', // text
+    recorded_at: scooter?.recorded_at ?? scooter?.last_update ?? null, // timestamp
+  });
 
-  const sc = STATUS[s.status];
+  // ── Chargement initial + listener temps réel ─────────────
+  useEffect(() => {
+    if (!scooter?.id) return;
+
+    // 1. Charger la dernière ligne telemetry pour ce scooter
+    supabase
+      .from('telemetry')
+      .select('battery, charging, speed, range, temp, latitude, longitude, address, alarm, starter, status, recorded_at')
+      .eq('scooter_id', scooter.id)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .single()
+      .then(({ data, error }) => {
+        if (data && !error) setTel(prev => ({ ...prev, ...data }));
+      });
+
+    // 2. Écouter les nouveaux INSERTs en temps réel
+    const channel = supabase
+      .channel(`dashboard-${scooter.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'telemetry',
+          filter: `scooter_id=eq.${scooter.id}`,
+        },
+        ({ new: d }) => {
+          setTel(prev => ({
+            battery:     d.battery     ?? prev.battery,
+            charging:    d.charging    ?? prev.charging,
+            speed:       d.speed       ?? prev.speed,
+            range:       d.range       ?? prev.range,
+            temp:        d.temp        ?? prev.temp,
+            latitude:    d.latitude    ?? prev.latitude,
+            longitude:   d.longitude   ?? prev.longitude,
+            address:     d.address     ?? prev.address,
+            alarm:       d.alarm       ?? prev.alarm,
+            starter:     d.starter     ?? prev.starter,
+            status:      d.status      ?? prev.status,
+            recorded_at: d.recorded_at ?? prev.recorded_at,
+          }));
+        }
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [scooter?.id]);
+
+  // ── Guard ────────────────────────────────────────────────
+  if (!scooter) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>⚠️</Text>
+        <Text style={{ color: C.white, fontSize: 16, fontWeight: '700', marginBottom: 8 }}>Données indisponibles</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}
+          style={{ backgroundColor: C.bgElevated, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, marginTop: 8 }}>
+          <Text style={{ color: C.accent, fontWeight: '700' }}>← Retour</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const sc = STATUS[tel.status] ?? STATUS.offline;
 
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Back */}
+        {/* ── Retour ── */}
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>← Retour</Text>
         </TouchableOpacity>
 
-        {/* Hero */}
+        {/* ── Hero ── */}
         <View style={styles.hero}>
           <View style={styles.heroLeft}>
             <View style={[styles.statusBadge, { borderColor: sc.color + '44', backgroundColor: sc.bg }]}>
               <View style={[styles.dot, { backgroundColor: sc.color }]} />
               <Text style={[styles.statusText, { color: sc.color }]}>{sc.label}</Text>
             </View>
-            <Text style={styles.heroName}>{s.name}</Text>
-            <Text style={styles.heroModel}>{s.model}</Text>
+            <Text style={styles.heroName}>{scooter.name ?? 'Scooter'}</Text>
+            <Text style={styles.heroModel}>{scooter.model ?? ''}</Text>
+            {scooter.reference
+              ? <Text style={{ fontSize: 10, color: C.accent, marginTop: 2 }}>#{scooter.reference}</Text>
+              : null}
           </View>
           <Text style={styles.heroEmoji}>🛵</Text>
         </View>
 
-        {/* Hero stats */}
-        <View style={styles.heroStats}>
-          {[
-            { label: 'Batterie',  value: s.battery != null ? `${s.battery}%` : '—', color: battColor(s.battery) },
-            { label: 'Trajets',   value: `${s.trips}`,                               color: C.white },
-            { label: 'Total km',  value: `${(s.totalKm/1000).toFixed(1)}k`,          color: C.white },
-          ].map(({ label, value, color }) => (
-            <View key={label} style={styles.heroStat}>
-              <Text style={[styles.heroStatValue, { color }]}>{value}</Text>
-              <Text style={styles.heroStatLabel}>{label}</Text>
+        {/* ── Batterie hero ── */}
+        <View style={styles.battHero}>
+          <BatteryBar value={tel.battery} />
+          <Text style={[styles.battHeroValue, { color: battColor(tel.battery) }]}>
+            {tel.battery != null ? `${tel.battery}%` : '—'}
+          </Text>
+          {tel.charging && (
+            <View style={styles.chargeBadge}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: C.warning }}>⚡ En charge</Text>
             </View>
-          ))}
+          )}
+          <Text style={styles.battHeroLabel}>Batterie</Text>
         </View>
 
-        {/* Map */}
-        <Text style={styles.sectionTitle}>Localisation</Text>
-        <MapCard
-          address={s.gps.address}
-          lastUpdate={s.gps.lastUpdate}
-          connected={s.status !== 'offline'}
-        />
-
-        {/* Controls */}
-        <Text style={styles.sectionTitle}>Contrôles</Text>
-        <View style={styles.row}>
-          <ToggleCard icon="🔒" label="Alarme"    status={alarm   ? 'Armée'  : 'Désarmée'} active={alarm}   onPress={() => setAlarm(v => !v)} />
-          <ToggleCard icon="⚡" label="Démarrage" status={starter ? 'Actif'  : 'Inactif'}  active={starter} onPress={() => setStarter(v => !v)} />
-        </View>
-
-        {/* Stats — sans Vitesse */}
+        {/* ── Stats en direct ── */}
         <Text style={styles.sectionTitle}>Stats en direct</Text>
         <View style={styles.statsGrid}>
-          <StatCard icon="🔋" value={s.battery} unit="%" label="BATTERIE"
-            badge={s.charging ? '⚡ Charge' : null} badgeColor={C.success} />
-          <StatCard icon="🌡️" value={s.temp}    unit="°C"  label="TEMPÉRATURE" />
+          <StatCard
+            icon="⚡"
+            label="VITESSE"
+            value={tel.speed != null ? tel.speed.toFixed(1) : null}
+            unit="km/h"
+            color={C.accent}
+          />
+          <StatCard
+            icon="🛣️"
+            label="AUTONOMIE"
+            value={tel.range != null ? tel.range.toFixed(0) : null}
+            unit="km"
+            color={C.success}
+          />
+          <StatCard
+            icon="🌡️"
+            label="TEMP"
+            value={tel.temp != null ? tel.temp.toFixed(1) : null}
+            unit="°C"
+            color={tel.temp != null && tel.temp > 60 ? C.danger : C.white}
+          />
         </View>
+
+        {/* ── Localisation ── */}
+        <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Localisation</Text>
+        <MapCard
+          address={tel.address}
+          lastUpdate={timeAgo(tel.recorded_at)}
+          connected={tel.status !== 'offline'}
+        />
+
+        {/* ── Contrôles ── */}
+        <Text style={styles.sectionTitle}>Contrôles</Text>
+        <View style={styles.row}>
+          <ToggleCard
+            icon="🔒"
+            label="Alarme"
+            status={tel.alarm ? 'Armée' : 'Désarmée'}
+            active={tel.alarm}
+            onPress={() => setTel(prev => ({ ...prev, alarm: !prev.alarm }))}
+          />
+          <ToggleCard
+            icon="⚡"
+            label="Démarrage"
+            status={tel.starter ? 'Actif' : 'Inactif'}
+            active={tel.starter}
+            onPress={() => setTel(prev => ({ ...prev, starter: !prev.starter }))}
+          />
+        </View>
+
+        {/* ── Dernière MAJ ── */}
+        {tel.recorded_at ? (
+          <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'center', marginTop: 4 }}>
+            Dernière télémétrie {timeAgo(tel.recorded_at)}
+          </Text>
+        ) : null}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -161,11 +337,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   scroll: { padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 },
 
-  backBtn: {
-    alignSelf: 'flex-start', backgroundColor: C.bgElevated,
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1, borderColor: C.border, marginBottom: 20,
-  },
+  backBtn:  { alignSelf: 'flex-start', backgroundColor: C.bgElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border, marginBottom: 20 },
   backText: { fontSize: 12, fontWeight: '700', color: C.textSecondary },
 
   hero:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
@@ -178,12 +350,19 @@ const styles = StyleSheet.create({
   dot:         { width: 7, height: 7, borderRadius: 4 },
   statusText:  { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
 
-  heroStats:      { flexDirection: 'row', gap: 8, marginBottom: 28 },
-  heroStat:       { flex: 1, backgroundColor: C.bgElevated, borderRadius: 14, padding: 12, alignItems: 'center' },
-  heroStatValue:  { fontSize: 16, fontWeight: '800', color: C.white, letterSpacing: -0.5 },
-  heroStatLabel:  { fontSize: 8, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 3 },
+  battHero:      { backgroundColor: C.bgCard, borderRadius: 18, padding: 20, alignItems: 'center', gap: 8, marginBottom: 24, borderWidth: 1, borderColor: C.border },
+  battHeroValue: { fontSize: 52, fontWeight: '900', letterSpacing: -2 },
+  battHeroLabel: { fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 },
+  chargeBadge:   { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: C.warningDim, borderWidth: 1, borderColor: C.warning + '55' },
 
   sectionTitle: { fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12, marginTop: 4 },
+
+  statsGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  statCard:  { flex: 1, backgroundColor: C.bgCard, borderRadius: 16, padding: 14, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: C.border },
+  statIcon:  { fontSize: 20 },
+  statValue: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+  statUnit:  { fontSize: 10, fontWeight: '600', color: C.textSecondary },
+  statLabel: { fontSize: 7, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 },
 
   mapCard:      { backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.border, marginBottom: 20 },
   mapArea:      { height: 180, backgroundColor: '#13131A', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
@@ -212,15 +391,4 @@ const styles = StyleSheet.create({
   trackOn:      { backgroundColor: C.accent },
   thumb:        { width: 18, height: 18, borderRadius: 9, backgroundColor: C.textMuted },
   thumbOn:      { backgroundColor: C.bg, alignSelf: 'flex-end' },
-
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statCard:  { width: '47.5%', backgroundColor: C.bgCard, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border, minHeight: 110, justifyContent: 'space-between' },
-  statTop:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statIcon:  { fontSize: 20 },
-  badge:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1 },
-  badgeText: { fontSize: 9, fontWeight: '700' },
-  statValue: { fontSize: 32, fontWeight: '900', color: C.white, letterSpacing: -1.5 },
-  statEmpty: { color: C.textMuted, fontSize: 24 },
-  statUnit:  { fontSize: 12, fontWeight: '600', color: C.textSecondary },
-  statLabel: { fontSize: 8, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 },
 });

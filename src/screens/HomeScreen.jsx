@@ -37,15 +37,189 @@ function battColor(v) {
   return C.danger;
 }
 
+function wheelColor(v) {
+  if (v == null) return C.textMuted;
+  if (v < 1.5)  return C.danger;
+  if (v < 2.2)  return C.warning;
+  return C.success;
+}
+
 function timeAgo(dateStr) {
   if (!dateStr) return null;
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-  if (diff < 60)   return `il y a ${diff}s`;
-  if (diff < 3600) return `il y a ${Math.floor(diff / 60)}min`;
-  return `il y a ${Math.floor(diff / 3600)}h`;
+  if (diff < 60)    return `il y a ${diff}s`;
+  if (diff < 3600)  return `il y a ${Math.floor(diff / 60)}min`;
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`;
+  return `il y a ${Math.floor(diff / 86400)}j`;
 }
 
-// ─── Modal Ajout / Modification ───────────────────────────
+function BatteryIcon({ value }) {
+  const getCell = (idx) => {
+    if (value == null) return C.textMuted;
+    const min = idx * 33.3;
+    if (value <= min) return C.bgElevated;
+    if (value <= 20)  return C.danger;
+    if (value <= 50)  return C.warning;
+    return C.success;
+  };
+  const border = battColor(value);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      <View style={{
+        width: 26, height: 12, borderRadius: 3,
+        borderWidth: 1.5, borderColor: border + '66',
+        flexDirection: 'row', padding: 2, gap: 1.5,
+        alignItems: 'center', backgroundColor: C.bgCard,
+      }}>
+        {[0, 1, 2].map(i => (
+          <View key={i} style={{ flex: 1, height: '100%', borderRadius: 1, backgroundColor: getCell(i) }} />
+        ))}
+      </View>
+      <View style={{ width: 2, height: 6, borderRadius: 1, backgroundColor: border + '88' }} />
+    </View>
+  );
+}
+
+function IndicCell({ children, alertColor }) {
+  return (
+    <View style={{
+      flex: 1, backgroundColor: C.bgElevated, borderRadius: 12,
+      paddingVertical: 10, paddingHorizontal: 4,
+      alignItems: 'center', gap: 4,
+      borderWidth: 1,
+      borderColor: alertColor ? alertColor + '33' : 'transparent',
+    }}>
+      {children}
+    </View>
+  );
+}
+
+function Dot({ color }) {
+  return (
+    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+  );
+}
+
+function Label({ text }) {
+  return (
+    <Text style={{ fontSize: 7, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
+      {text}
+    </Text>
+  );
+}
+
+function ScooterCard({ item, onPress }) {
+  const sc        = STATUS[item.status] ?? STATUS.offline;
+  const tamper    = item.tamper_points ?? [false, false, false];
+  const anyTamper = tamper.some(Boolean);
+  const alertBorder = (anyTamper || item.fallen) ? C.danger + '44' : C.border;
+
+  return (
+    <TouchableOpacity
+      onPress={() => onPress(item)}
+      activeOpacity={0.75}
+      style={{
+        backgroundColor: C.bgCard,
+        borderRadius: 20,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: alertBorder,
+      }}
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+        <View>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: C.white }}>{item.name}</Text>
+          <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{item.model}</Text>
+          {item.reference
+            ? <Text style={{ fontSize: 9, color: C.accent, marginTop: 2 }}>#{item.reference}</Text>
+            : null}
+        </View>
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 5,
+          paddingHorizontal: 10, paddingVertical: 5,
+          borderRadius: 20, borderWidth: 1,
+          borderColor: sc.color + '44', backgroundColor: sc.bg,
+        }}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
+          <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>{sc.label}</Text>
+        </View>
+      </View>
+
+      {/* ── Toutes les cellules sur une seule ligne ── */}
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        <IndicCell>
+          <Text style={{ fontSize: 16 }}>🔋</Text>
+          <BatteryIcon value={item.battery} />
+          <Text style={{ fontSize: 11, fontWeight: '800', color: battColor(item.battery) }}>
+            {item.battery != null ? `${item.battery}%` : '—'}
+          </Text>
+          <Label text="Batt." />
+        </IndicCell>
+
+        <IndicCell alertColor={anyTamper ? C.danger : null}>
+          <Text style={{ fontSize: 16 }}>🚨</Text>
+          <View style={{ flexDirection: 'row', gap: 3, alignItems: 'center' }}>
+            {tamper.slice(0, 3).map((active, i) => (
+              <Dot key={i} color={active ? C.danger : C.success} />
+            ))}
+          </View>
+          <Text style={{ fontSize: 9, fontWeight: '700', color: anyTamper ? C.danger : C.success }}>
+            {anyTamper ? 'Alerte' : 'OK'}
+          </Text>
+          <Label text="Sabotage" />
+        </IndicCell>
+
+        <IndicCell>
+          <Text style={{ fontSize: 16 }}>🔒</Text>
+          <Dot color={item.alarm ? C.success : C.danger} />
+          <Text style={{ fontSize: 9, fontWeight: '700', color: item.alarm ? C.success : C.danger }}>
+            {item.alarm ? 'Armée' : 'OFF'}
+          </Text>
+          <Label text="Alarme" />
+        </IndicCell>
+
+        <IndicCell alertColor={item.fallen ? C.danger : null}>
+          <Text style={{
+            fontSize: 16,
+            transform: [{ rotate: item.fallen ? '90deg' : '0deg' }],
+          }}>🛵</Text>
+          <Dot color={item.fallen ? C.danger : C.success} />
+          <Text style={{ fontSize: 9, fontWeight: '700', color: item.fallen ? C.danger : C.success }}>
+            {item.fallen ? 'Chute !' : 'Stable'}
+          </Text>
+          <Label text="Chute" />
+        </IndicCell>
+
+        <IndicCell alertColor={wheelColor(item.wheel_front) === C.danger || wheelColor(item.wheel_rear) === C.danger ? C.danger : null}>
+          <Text style={{ fontSize: 16 }}>⚙️</Text>
+          <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
+            <View style={{ alignItems: 'center', gap: 2 }}>
+              <Dot color={wheelColor(item.wheel_front)} />
+              <Text style={{ fontSize: 8, fontWeight: '700', color: wheelColor(item.wheel_front) }}>
+                {item.wheel_front != null ? `${item.wheel_front}b` : '—'}
+              </Text>
+              <Text style={{ fontSize: 6, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>AV</Text>
+            </View>
+            <View style={{ width: 1, height: 20, backgroundColor: C.border }} />
+            <View style={{ alignItems: 'center', gap: 2 }}>
+              <Dot color={wheelColor(item.wheel_rear)} />
+              <Text style={{ fontSize: 8, fontWeight: '700', color: wheelColor(item.wheel_rear) }}>
+                {item.wheel_rear != null ? `${item.wheel_rear}b` : '—'}
+              </Text>
+              <Text style={{ fontSize: 6, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>AR</Text>
+            </View>
+          </View>
+          <Label text="Roues" />
+        </IndicCell>
+      </View>
+
+      <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 12 }}>
+        {item.last_update ? `Mis à jour ${timeAgo(item.last_update)}` : 'Aucune donnée'} →
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   const isEdit = !!initial;
   const [name,      setName]      = useState(initial?.name      ?? '');
@@ -128,7 +302,6 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   );
 }
 
-// ─── Modal Déconnexion ─────────────────────────────────────
 function LogoutModal({ visible, onClose, onConfirm, loading }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -164,15 +337,13 @@ function LogoutModal({ visible, onClose, onConfirm, loading }) {
   );
 }
 
-// ─── Écran principal ───────────────────────────────────────
-export default function HomeScreen() {
-  const [scooters,     setScooters]     = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [selected,     setSelected]     = useState(null);
-  const [showAdd,      setShowAdd]      = useState(false);
-  const [showLogout,   setShowLogout]   = useState(false);
-  const [logoutLoading,setLogoutLoading]= useState(false);
-  const [userEmail,    setUserEmail]    = useState('');
+export default function HomeScreen({ navigation }) {
+  const [scooters,      setScooters]      = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [showAdd,       setShowAdd]       = useState(false);
+  const [showLogout,    setShowLogout]    = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+  const [userEmail,     setUserEmail]     = useState('');
 
   const fetchScooters = async () => {
     const { data, error } = await supabase.from('scooters_live').select('*');
@@ -184,7 +355,6 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchScooters();
 
-    // Récupère l'email de l'utilisateur connecté
     supabase.auth.getUser().then(({ data }) => {
       setUserEmail(data?.user?.email ?? '');
     });
@@ -203,7 +373,6 @@ export default function HomeScreen() {
   const handleLogout = async () => {
     setLogoutLoading(true);
     await supabase.auth.signOut();
-    // App.js détecte onAuthStateChange → redirige vers AuthScreen auto
     setLogoutLoading(false);
     setShowLogout(false);
   };
@@ -223,34 +392,28 @@ export default function HomeScreen() {
       ) : (
         <FlatList
           data={scooters}
-          keyExtractor={i => i.id}
+          keyExtractor={i => String(i.id)}
           contentContainerStyle={{ padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={() => (
             <>
-              {/* ── Header avec déconnexion ── */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 10, letterSpacing: 3, color: C.accent, textTransform: 'uppercase', marginBottom: 8 }}>
                     Tableau de bord
                   </Text>
                   <Text style={{ fontSize: 36, fontWeight: '900', color: C.white, letterSpacing: -1 }}>
-                    Ma <Text style={{ color: C.accent }}>Flotte</Text>
+                    EVE <Text style={{ color: C.accent }}>Mobility</Text>
                   </Text>
                   <Text style={{ fontSize: 12, color: C.textSecondary, marginTop: 6 }}>
                     {scooters.length} scooter{scooters.length > 1 ? 's' : ''}
                   </Text>
-                  {/* Email utilisateur */}
                   {userEmail ? (
-                    <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>
-                      👤 {userEmail}
-                    </Text>
+                    <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>👤 {userEmail}</Text>
                   ) : null}
                 </View>
 
-                {/* Boutons droite */}
                 <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                  {/* Ajouter scooter */}
                   <TouchableOpacity onPress={() => setShowAdd(true)} activeOpacity={0.8}
                     style={{
                       width: 48, height: 48, borderRadius: 16, backgroundColor: C.accent,
@@ -260,7 +423,6 @@ export default function HomeScreen() {
                     <Text style={{ fontSize: 26, color: C.bg, fontWeight: '300', lineHeight: 30 }}>+</Text>
                   </TouchableOpacity>
 
-                  {/* Déconnexion */}
                   <TouchableOpacity onPress={() => setShowLogout(true)} activeOpacity={0.8}
                     style={{
                       width: 48, height: 48, borderRadius: 16,
@@ -273,7 +435,6 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {/* Stats globales */}
               <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
                 {[
                   { value: online,   color: C.success, label: 'En ligne'  },
@@ -290,42 +451,12 @@ export default function HomeScreen() {
             </>
           )}
 
-          renderItem={({ item }) => {
-            const sc = STATUS[item.status] ?? STATUS.offline;
-            return (
-              <TouchableOpacity onPress={() => setSelected(item)} activeOpacity={0.75}
-                style={{ backgroundColor: C.bgCard, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                  <View>
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: C.white }}>{item.name}</Text>
-                    <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{item.model}</Text>
-                    {item.reference ? <Text style={{ fontSize: 9, color: C.accent, marginTop: 2 }}>#{item.reference}</Text> : null}
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5,
-                    borderRadius: 20, borderWidth: 1, borderColor: sc.color + '44', backgroundColor: sc.bg }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
-                    <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>{sc.label}</Text>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <View style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: battColor(item.battery) }}>
-                      {item.battery != null ? `${item.battery}%` : '—'}
-                    </Text>
-                    <Text style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', marginTop: 3 }}>Batterie</Text>
-                    <View style={{ width: '100%', height: 3, backgroundColor: C.border, borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
-                      <View style={{ height: '100%', borderRadius: 2, width: `${item.battery ?? 0}%`, backgroundColor: battColor(item.battery) }} />
-                    </View>
-                  </View>
-                </View>
-
-                <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 12 }}>
-                  {item.last_update ? `Mis à jour ${timeAgo(item.last_update)}` : 'Aucune donnée'} →
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
+          renderItem={({ item }) => (
+            <ScooterCard
+              item={item}
+              onPress={(scooter) => navigation.navigate('Dashboard', { scooter })}
+            />
+          )}
 
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           ListFooterComponent={() => <View style={{ height: 40 }} />}
