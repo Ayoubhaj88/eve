@@ -245,7 +245,7 @@ export default function AuthScreen() {
                 <Text style={{ fontSize: 38 }}>🛵</Text>
               </View>
               <Text style={{ fontSize: 9, letterSpacing: 4, color: C.accent, textTransform: 'uppercase' }}>
-                FlotteManager
+                EVE MOBILITY
               </Text>
             </View>
 
