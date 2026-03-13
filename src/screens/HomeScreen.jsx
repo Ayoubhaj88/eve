@@ -2,55 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
-  Modal, TextInput, KeyboardAvoidingView, Alert,
+  Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
-
-const C = {
-  bg:           '#0A0A0F',
-  bgCard:       '#13131A',
-  bgElevated:   '#1E1E2E',
-  accent:       '#00E5FF',
-  success:      '#00E676',
-  successDim:   'rgba(0,230,118,0.12)',
-  warning:      '#FFB300',
-  warningDim:   'rgba(255,179,0,0.12)',
-  danger:       '#FF1744',
-  dangerDim:    'rgba(255,23,68,0.12)',
-  white:        '#FFFFFF',
-  textSecondary:'#8A8A9A',
-  textMuted:    '#4A4A5A',
-  border:       '#1E1E2E',
-  borderAccent: 'rgba(0,229,255,0.25)',
-};
-
-const STATUS = {
-  online:   { color: C.success,   bg: C.successDim,  label: 'En ligne'   },
-  offline:  { color: C.textMuted, bg: 'transparent', label: 'Hors ligne' },
-  charging: { color: C.warning,   bg: C.warningDim,  label: 'En charge'  },
-};
-
-function battColor(v) {
-  if (v == null) return C.textMuted;
-  if (v > 50)   return C.success;
-  if (v > 20)   return C.warning;
-  return C.danger;
-}
+import { C, STATUS, battColor, timeAgo, alertOk, alertConfirm } from '../constants';
 
 function wheelColor(v) {
   if (v == null) return C.textMuted;
   if (v < 1.5)  return C.danger;
   if (v < 2.2)  return C.warning;
   return C.success;
-}
-
-function timeAgo(dateStr) {
-  if (!dateStr) return null;
-  const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-  if (diff < 60)    return `il y a ${diff}s`;
-  if (diff < 3600)  return `il y a ${Math.floor(diff / 60)}min`;
-  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`;
-  return `il y a ${Math.floor(diff / 86400)}j`;
 }
 
 function BatteryIcon({ value }) {
@@ -108,7 +69,7 @@ function Label({ text }) {
   );
 }
 
-function ScooterCard({ item, onPress }) {
+function ScooterCard({ item, onPress, onEdit, onDelete }) {
   const sc        = STATUS[item.status] ?? STATUS.offline;
   const tamper    = item.tamper_points ?? [false, false, false];
   const anyTamper = tamper.some(Boolean);
@@ -213,9 +174,21 @@ function ScooterCard({ item, onPress }) {
         </IndicCell>
       </View>
 
-      <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 12 }}>
-        {item.last_update ? `Mis à jour ${timeAgo(item.last_update)}` : 'Aucune donnée'} →
-      </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+        <Text style={{ fontSize: 10, color: C.textMuted }}>
+          {item.last_update ? `Mis à jour ${timeAgo(item.last_update)}` : 'Aucune donnée'}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <TouchableOpacity onPress={() => onEdit(item)}
+            style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 12 }}>✏️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onDelete(item)}
+            style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.dangerDim, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.danger + '44' }}>
+            <Text style={{ fontSize: 12 }}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -234,7 +207,7 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   }, [initial, visible]);
 
   const handleSave = async () => {
-    if (!name.trim()) { Alert.alert('Erreur', 'Le nom est obligatoire.'); return; }
+    if (!name.trim()) { alertOk('Erreur', 'Le nom est obligatoire.'); return; }
     setLoading(true);
     try {
       if (isEdit) {
@@ -249,7 +222,7 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
       }
       onSaved(); onClose();
     } catch (err) {
-      Alert.alert('Erreur', err.message);
+      alertOk('Erreur', err.message);
     } finally {
       setLoading(false);
     }
@@ -338,17 +311,39 @@ function LogoutModal({ visible, onClose, onConfirm, loading }) {
 }
 
 export default function HomeScreen({ navigation }) {
-  const [scooters,      setScooters]      = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [showAdd,       setShowAdd]       = useState(false);
-  const [showLogout,    setShowLogout]    = useState(false);
-  const [logoutLoading, setLogoutLoading] = useState(false);
-  const [userEmail,     setUserEmail]     = useState('');
+  const [scooters,        setScooters]        = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [showForm,        setShowForm]        = useState(false);
+  const [editingScooter,  setEditingScooter]  = useState(null);
+  const [showLogout,      setShowLogout]      = useState(false);
+  const [logoutLoading,   setLogoutLoading]   = useState(false);
+  const [userEmail,       setUserEmail]       = useState('');
 
   const fetchScooters = async () => {
-    const { data, error } = await supabase.from('scooters_live').select('*');
-    if (error) console.error('Supabase error:', error);
-    else setScooters(data ?? []);
+    const { data: scooterData, error } = await supabase.from('scooters').select('*');
+    if (error) { console.error('Supabase error:', error); setLoading(false); return; }
+
+    const ids = (scooterData ?? []).map(s => s.id);
+    let telMap = {};
+    if (ids.length > 0) {
+      const results = await Promise.all(
+        ids.map(id =>
+          supabase.from('telemetry').select('*')
+            .eq('scooter_id', id)
+            .order('recorded_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        )
+      );
+      results.forEach((res, i) => {
+        if (res.data) telMap[ids[i]] = res.data;
+      });
+    }
+
+    setScooters((scooterData ?? []).map(s => {
+      const t = telMap[s.id];
+      return t ? { ...s, ...t, id: s.id, last_update: t.recorded_at } : s;
+    }));
     setLoading(false);
   };
 
@@ -362,9 +357,12 @@ export default function HomeScreen({ navigation }) {
     const channel = supabase
       .channel('telemetry-all')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' },
-        payload => setScooters(prev =>
-          prev.map(s => s.id === payload.new.scooter_id ? { ...s, ...payload.new } : s)
-        )
+        payload => {
+          const { id: _tid, scooter_id, ...tel } = payload.new;
+          setScooters(prev =>
+            prev.map(s => s.id === scooter_id ? { ...s, ...tel, last_update: tel.recorded_at } : s)
+          );
+        }
       )
       .subscribe();
     return () => supabase.removeChannel(channel);
@@ -375,6 +373,14 @@ export default function HomeScreen({ navigation }) {
     await supabase.auth.signOut();
     setLogoutLoading(false);
     setShowLogout(false);
+  };
+
+  const deleteScooter = (item) => {
+    alertConfirm('Supprimer', `Supprimer "${item.name}" ?`, async () => {
+      const { error } = await supabase.from('scooters').delete().eq('id', item.id);
+      if (error) alertOk('Erreur', error.message);
+      else fetchScooters();
+    });
   };
 
   const online   = scooters.filter(s => s.status !== 'offline').length;
@@ -414,7 +420,7 @@ export default function HomeScreen({ navigation }) {
                 </View>
 
                 <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                  <TouchableOpacity onPress={() => setShowAdd(true)} activeOpacity={0.8}
+                  <TouchableOpacity onPress={() => { setEditingScooter(null); setShowForm(true); }} activeOpacity={0.8}
                     style={{
                       width: 48, height: 48, borderRadius: 16, backgroundColor: C.accent,
                       justifyContent: 'center', alignItems: 'center',
@@ -455,6 +461,8 @@ export default function HomeScreen({ navigation }) {
             <ScooterCard
               item={item}
               onPress={(scooter) => navigation.navigate('Dashboard', { scooter })}
+              onEdit={(scooter) => { setEditingScooter(scooter); setShowForm(true); }}
+              onDelete={deleteScooter}
             />
           )}
 
@@ -472,7 +480,12 @@ export default function HomeScreen({ navigation }) {
         />
       )}
 
-      <ScooterFormModal visible={showAdd} onClose={() => setShowAdd(false)} onSaved={fetchScooters} />
+      <ScooterFormModal
+        visible={showForm}
+        onClose={() => { setShowForm(false); setEditingScooter(null); }}
+        onSaved={fetchScooters}
+        initial={editingScooter}
+      />
 
       <LogoutModal
         visible={showLogout}

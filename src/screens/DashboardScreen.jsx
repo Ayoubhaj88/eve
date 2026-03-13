@@ -1,55 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { C, STATUS, battColor, timeAgo, alertOk, alertConfirm } from '../constants';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, Modal, TextInput,
-  KeyboardAvoidingView, Alert, ActivityIndicator,
+  KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
-
-const C = {
-  bg:            '#0A0A0F',
-  bgCard:        '#13131A',
-  bgElevated:    '#1E1E2E',
-  accent:        '#00E5FF',
-  success:       '#00E676',
-  successDim:    'rgba(0,230,118,0.12)',
-  warning:       '#FFB300',
-  warningDim:    'rgba(255,179,0,0.12)',
-  danger:        '#FF1744',
-  dangerDim:     'rgba(255,23,68,0.12)',
-  white:         '#FFFFFF',
-  textSecondary: '#8A8A9A',
-  textMuted:     '#4A4A5A',
-  border:        '#1E1E2E',
-};
-
-const SCOOTER_STATUS = {
-  online:   { color: C.success,   bg: C.successDim,  label: 'En ligne'   },
-  offline:  { color: C.textMuted, bg: 'transparent', label: 'Hors ligne' },
-  charging: { color: C.warning,   bg: C.warningDim,  label: 'En charge'  },
-};
 
 const BMS_STATUS = {
   charging:    { color: C.warning,   bg: C.warningDim,  icon: '⚡', label: 'En charge' },
   discharging: { color: C.success,   bg: C.successDim,  icon: '🔋', label: 'Décharge'  },
   idle:        { color: C.textMuted, bg: 'transparent', icon: '⏸️', label: 'Inactif'   },
 };
-
-function battColor(v) {
-  if (v == null) return C.textMuted;
-  if (v > 50) return C.success;
-  if (v > 20) return C.warning;
-  return C.danger;
-}
-
-function timeAgo(d) {
-  if (!d) return null;
-  const s = Math.floor((Date.now() - new Date(d)) / 1000);
-  if (s < 60)    return `il y a ${s}s`;
-  if (s < 3600)  return `il y a ${Math.floor(s / 60)}min`;
-  if (s < 86400) return `il y a ${Math.floor(s / 3600)}h`;
-  return `il y a ${Math.floor(s / 86400)}j`;
-}
 
 function BatteryBar({ value, fullWidth }) {
   const color = battColor(value);
@@ -62,7 +24,7 @@ function BatteryBar({ value, fullWidth }) {
         borderRadius: 3, borderWidth: 1.5, borderColor: color + '88',
         backgroundColor: C.bgElevated, overflow: 'hidden', padding: 2,
       }}>
-        <View style={{ width: `${value ?? 0}%`, height: '100%', borderRadius: 1.5, backgroundColor: color }} />
+        <View style={{ width: (value ?? 0) + '%', height: '100%', borderRadius: 1.5, backgroundColor: color }} />
       </View>
       <View style={{ width: 3, height: 7, borderRadius: 1, backgroundColor: color + '99' }} />
     </View>
@@ -77,7 +39,7 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial }) {
   useEffect(() => { setSerial(initial?.serial_number ?? ''); }, [initial, visible]);
 
   const save = async () => {
-    if (!serial.trim()) { Alert.alert('Erreur', 'Numéro de série obligatoire.'); return; }
+    if (!serial.trim()) { alertOk('Erreur', 'Numero de serie obligatoire.'); return; }
     setLoading(true);
     try {
       const row = { serial_number: serial.trim() };
@@ -86,7 +48,7 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial }) {
         : await supabase.from('batteries').insert({ ...row, scooter_id: scooterId });
       if (error) throw error;
       onSaved(); onClose();
-    } catch (e) { Alert.alert('Erreur', e.message); }
+    } catch (e) { alertOk('Erreur', e.message); }
     finally     { setLoading(false); }
   };
 
@@ -102,15 +64,15 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial }) {
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 24 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <Text style={{ fontSize: 20, fontWeight: '900', color: C.white }}>
-              {isEdit ? '✏️ Modifier' : '🔋 Nouvelle batterie'}
+              {isEdit ? 'Modifier' : 'Nouvelle batterie'}
             </Text>
             <TouchableOpacity onPress={onClose}
               style={{ backgroundColor: C.bgElevated, borderRadius: 20, width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ color: C.textMuted, fontSize: 16 }}>✕</Text>
+              <Text style={{ color: C.textMuted, fontSize: 16 }}>X</Text>
             </TouchableOpacity>
           </View>
           <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
-            Numéro de série *
+            Numero de serie *
           </Text>
           <TextInput
             value={serial} onChangeText={setSerial}
@@ -144,11 +106,7 @@ function BatteryCard({ item, onEdit, onDelete }) {
       backgroundColor: C.bgCard, borderRadius: 18,
       borderWidth: 1, borderColor: C.border, marginBottom: 10, overflow: 'hidden',
     }}>
-      {/* En-tête */}
-      <View style={{
-        flexDirection: 'row', alignItems: 'center', padding: 14,
-        borderBottomWidth: 1, borderColor: C.border,
-      }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderColor: C.border }}>
         <View style={{
           width: 38, height: 38, borderRadius: 11, backgroundColor: C.bgElevated,
           justifyContent: 'center', alignItems: 'center',
@@ -164,7 +122,7 @@ function BatteryCard({ item, onEdit, onDelete }) {
             {item.serial_number}
           </Text>
           <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-            Ajouté {timeAgo(item.created_at)}
+            Ajoute {timeAgo(item.created_at)}
           </Text>
         </View>
         <TouchableOpacity onPress={() => onEdit(item)}
@@ -177,20 +135,19 @@ function BatteryCard({ item, onEdit, onDelete }) {
         </TouchableOpacity>
       </View>
 
-      {/* Données BMS */}
       <View style={{ padding: 14, gap: 10 }}>
         {item.soc != null && (
-          <>
+          <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '700' }}>
-                État de charge
+                Etat de charge
               </Text>
               <Text style={{ fontSize: 22, fontWeight: '900', color: battColor(item.soc) }}>
                 {item.soc}%
               </Text>
             </View>
             <BatteryBar value={item.soc} fullWidth />
-          </>
+          </View>
         )}
 
         {bms && (
@@ -207,7 +164,7 @@ function BatteryCard({ item, onEdit, onDelete }) {
 
         {!hasBms && (
           <Text style={{ fontSize: 11, color: C.textMuted, textAlign: 'center', paddingVertical: 4 }}>
-            En attente des données BMS…
+            En attente des donnees BMS...
           </Text>
         )}
       </View>
@@ -219,11 +176,12 @@ export default function DashboardScreen({ route, navigation }) {
   const scooter = route.params?.scooter;
 
   const [tel, setTel] = useState({
-    battery:     scooter?.battery  ?? null,
-    charging:    scooter?.charging ?? false,
-    status:      scooter?.status   ?? 'offline',
-    recorded_at: scooter?.recorded_at ?? scooter?.last_update ?? null,
+    battery:     null,
+    charging:    false,
+    status:      scooter?.status ?? 'offline',
+    recorded_at: null,
   });
+  const [telLoading, setTelLoading] = useState(true);
 
   const [batteries,   setBatteries]   = useState([]);
   const [battLoading, setBattLoading] = useState(false);
@@ -242,43 +200,63 @@ export default function DashboardScreen({ route, navigation }) {
   };
 
   const deleteBattery = (item) => {
-    Alert.alert('Supprimer', `Supprimer « ${item.serial_number} » ?`, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: async () => {
-        const { error } = await supabase.from('batteries').delete().eq('id', item.id);
-        if (error) Alert.alert('Erreur', error.message);
-        else fetchBatteries();
-      }},
-    ]);
+    alertConfirm('Supprimer', `Supprimer "${item.serial_number}" ?`, async () => {
+      const { error } = await supabase.from('batteries').delete().eq('id', item.id);
+      if (error) alertOk('Erreur', error.message);
+      else fetchBatteries();
+    });
+  };
+
+  // ── Fetch telemetry (utilise aussi dans le polling) ────
+  const fetchTel = async () => {
+    if (!scooter?.id) return;
+    const { data, error } = await supabase
+      .from('telemetry')
+      .select('battery, charging, status, recorded_at')
+      .eq('scooter_id', scooter.id)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data && !error) setTel(p => ({ ...p, ...data }));
+    setTelLoading(false);
   };
 
   useEffect(() => {
     if (!scooter?.id) return;
 
-    supabase.from('telemetry')
-      .select('battery, charging, status, recorded_at')
-      .eq('scooter_id', scooter.id)
-      .order('recorded_at', { ascending: false })
-      .limit(1).single()
-      .then(({ data, error }) => { if (data && !error) setTel(p => ({ ...p, ...data })); });
+    // Chargement initial
+    fetchTel();
 
-    const telCh = supabase.channel(`tel-${scooter.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry', filter: `scooter_id=eq.${scooter.id}` },
-        ({ new: d }) => setTel(p => ({
-          battery:     d.battery     ?? p.battery,
-          charging:    d.charging    ?? p.charging,
-          status:      d.status      ?? p.status,
-          recorded_at: d.recorded_at ?? p.recorded_at,
-        }))
-      ).subscribe();
+    // Polling toutes les 15s (filet de securite si Realtime rate un event)
+    const poll = setInterval(fetchTel, 15000);
 
-    const battCh = supabase.channel(`batt-${scooter.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'batteries', filter: `scooter_id=eq.${scooter.id}` },
-        ({ new: d }) => setBatteries(prev => prev.map(b => b.id === d.id ? { ...b, ...d } : b))
-      ).subscribe();
+    // Realtime : nouveaux INSERTs telemetry (mise a jour instantanee)
+    const telCh = supabase.channel('tel-' + scooter.id)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public',
+        table: 'telemetry', filter: 'scooter_id=eq.' + scooter.id,
+      }, ({ new: d }) => setTel(p => ({
+        battery:     d.battery     ?? p.battery,
+        charging:    d.charging    ?? p.charging,
+        status:      d.status      ?? p.status,
+        recorded_at: d.recorded_at ?? p.recorded_at,
+      })))
+      .subscribe();
+
+    // Realtime : UPDATEs batteries (ESP PATCH → Supabase)
+    const battCh = supabase.channel('batt-' + scooter.id)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public',
+        table: 'batteries', filter: 'scooter_id=eq.' + scooter.id,
+      }, ({ new: d }) => setBatteries(prev => prev.map(b => b.id === d.id ? { ...b, ...d } : b)))
+      .subscribe();
 
     fetchBatteries();
-    return () => { supabase.removeChannel(telCh); supabase.removeChannel(battCh); };
+    return () => {
+      clearInterval(poll);
+      supabase.removeChannel(telCh);
+      supabase.removeChannel(battCh);
+    };
   }, [scooter?.id]);
 
   if (!scooter) return (
@@ -286,12 +264,12 @@ export default function DashboardScreen({ route, navigation }) {
       <Text style={{ fontSize: 48, marginBottom: 16 }}>⚠️</Text>
       <TouchableOpacity onPress={() => navigation.goBack()}
         style={{ backgroundColor: C.bgElevated, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
-        <Text style={{ color: C.accent, fontWeight: '700' }}>← Retour</Text>
+        <Text style={{ color: C.accent, fontWeight: '700' }}>Retour</Text>
       </TouchableOpacity>
     </View>
   );
 
-  const sc = SCOOTER_STATUS[tel.status] ?? SCOOTER_STATUS.offline;
+  const sc = STATUS[tel.status] ?? STATUS.offline;
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -316,30 +294,38 @@ export default function DashboardScreen({ route, navigation }) {
             <Text style={{ fontSize: 28, fontWeight: '900', color: C.white, letterSpacing: -1, marginTop: 8 }}>
               {scooter.name ?? 'Scooter'}
             </Text>
-            {scooter.model     ? <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{scooter.model}</Text> : null}
+            {scooter.model     ? <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{scooter.model}</Text>     : null}
             {scooter.reference ? <Text style={{ fontSize: 10, color: C.accent,   marginTop: 2 }}>#{scooter.reference}</Text> : null}
           </View>
           <Text style={{ fontSize: 48 }}>🛵</Text>
         </View>
 
-        {/* Batterie hero */}
+        {/* Batterie hero — spinner pendant le chargement */}
         <View style={{ backgroundColor: C.bgCard, borderRadius: 18, padding: 20, alignItems: 'center', gap: 8, marginBottom: 28, borderWidth: 1, borderColor: C.border }}>
-          <BatteryBar value={tel.battery} />
-          <Text style={{ fontSize: 52, fontWeight: '900', letterSpacing: -2, color: battColor(tel.battery) }}>
-            {tel.battery != null ? `${tel.battery}%` : '—'}
-          </Text>
-          {tel.charging && (
-            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: C.warningDim, borderWidth: 1, borderColor: C.warning + '55' }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: C.warning }}>⚡ En charge</Text>
-            </View>
+          {telLoading ? (
+            <ActivityIndicator color={C.accent} style={{ marginVertical: 18 }} />
+          ) : (
+            <>
+              <BatteryBar value={tel.battery} />
+              <Text style={{ fontSize: 52, fontWeight: '900', letterSpacing: -2, color: battColor(tel.battery) }}>
+                {tel.battery != null ? tel.battery + '%' : '—'}
+              </Text>
+              {tel.charging ? (
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: C.warningDim, borderWidth: 1, borderColor: C.warning + '55' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: C.warning }}>⚡ En charge</Text>
+                </View>
+              ) : null}
+            </>
           )}
-          <Text style={{ fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>Charge globale</Text>
+          <Text style={{ fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+            Charge globale
+          </Text>
         </View>
 
         {/* Header batteries */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
-            Batteries{batteries.length > 0 ? <Text style={{ color: C.accent }}> ({batteries.length})</Text> : null}
+            Batteries{batteries.length > 0 ? ' (' + batteries.length + ')' : ''}
           </Text>
           <TouchableOpacity
             onPress={() => { setEditingBatt(null); setShowForm(true); }}
@@ -349,14 +335,14 @@ export default function DashboardScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Liste */}
+        {/* Liste batteries */}
         {battLoading ? (
           <ActivityIndicator color={C.accent} style={{ marginVertical: 24 }} />
         ) : batteries.length === 0 ? (
           <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: C.border, borderStyle: 'dashed', marginBottom: 20 }}>
             <Text style={{ fontSize: 36, marginBottom: 10 }}>🔋</Text>
             <Text style={{ fontSize: 13, color: C.textMuted, textAlign: 'center', lineHeight: 20 }}>
-              Aucune batterie enregistrée.{'\n'}Appuyez sur + pour en ajouter une.
+              Aucune batterie enregistree.{'\n'}Appuyez sur + pour en ajouter une.
             </Text>
           </View>
         ) : batteries.map(b => (
@@ -366,11 +352,11 @@ export default function DashboardScreen({ route, navigation }) {
           />
         ))}
 
-        {tel.recorded_at
-          ? <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'center', marginTop: 8 }}>
-              Dernière télémétrie {timeAgo(tel.recorded_at)}
-            </Text>
-          : null}
+        {tel.recorded_at ? (
+          <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'center', marginTop: 8 }}>
+            Derniere telemetrie {timeAgo(tel.recorded_at)}
+          </Text>
+        ) : null}
 
         <View style={{ height: 40 }} />
       </ScrollView>

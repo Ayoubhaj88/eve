@@ -5,23 +5,7 @@ import {
   Animated, StatusBar, ScrollView,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
-
-const C = {
-  bg:           '#0A0A0F',
-  bgCard:       '#13131A',
-  bgElevated:   '#1E1E2E',
-  accent:       '#00E5FF',
-  accentDim:    'rgba(0,229,255,0.08)',
-  success:      '#00E676',
-  successDim:   'rgba(0,230,118,0.10)',
-  danger:       '#FF1744',
-  dangerDim:    'rgba(255,23,68,0.10)',
-  white:        '#FFFFFF',
-  textSecondary:'#8A8A9A',
-  textMuted:    '#4A4A5A',
-  border:       '#1E1E2E',
-  borderAccent: 'rgba(0,229,255,0.25)',
-};
+import { C } from '../constants';
 
 // ─── Erreurs Supabase → message lisible ───────────────────
 function parseError(msg) {
@@ -142,6 +126,8 @@ export default function AuthScreen() {
     setGlobalError('');
     setPassword('');
     setConfirmPass('');
+    setResetSent(false);
+    setShowForgot(false);
   };
 
   // ── LOGIN ─────────────────────────────────────────────
@@ -156,13 +142,7 @@ export default function AuthScreen() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
-        // Si "already registered" → suggère de passer en login
-        if (error.message.includes('User already registered')) {
-          setGlobalError('');
-          switchMode('login');
-        } else {
-          setGlobalError(parseError(error.message));
-        }
+        setGlobalError(parseError(error.message));
       }
       // Succès → App.js redirige automatiquement
     } finally {
