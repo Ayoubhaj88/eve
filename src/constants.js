@@ -2,9 +2,9 @@ import { Alert, Platform } from 'react-native';
 
 // ─── Colors ───────────────────────────────────────────────
 export const C = {
-  bg:           '#0A0A0F',
-  bgCard:       '#13131A',
-  bgElevated:   '#1E1E2E',
+  bg:           '#000000',
+  bgCard:       '#111111',
+  bgElevated:   '#1A1A1A',
   accent:       '#00E5FF',
   accentDim:    'rgba(0,229,255,0.08)',
   accentGlow:   'rgba(0,229,255,0.10)',
@@ -17,7 +17,7 @@ export const C = {
   white:        '#FFFFFF',
   textSecondary:'#8A8A9A',
   textMuted:    '#4A4A5A',
-  border:       '#1E1E2E',
+  border:       '#1A1A1A',
   borderAccent: 'rgba(0,229,255,0.25)',
 };
 

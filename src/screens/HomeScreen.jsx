@@ -7,38 +7,13 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { C, STATUS, battColor, timeAgo, alertOk, alertConfirm } from '../constants';
 
+// ── Helpers ──────────────────────────────────────────────
+
 function wheelColor(v) {
   if (v == null) return C.textMuted;
   if (v < 1.5)  return C.danger;
   if (v < 2.2)  return C.warning;
   return C.success;
-}
-
-function BatteryIcon({ value }) {
-  const getCell = (idx) => {
-    if (value == null) return C.textMuted;
-    const min = idx * 33.3;
-    if (value <= min) return C.bgElevated;
-    if (value <= 20)  return C.danger;
-    if (value <= 50)  return C.warning;
-    return C.success;
-  };
-  const border = battColor(value);
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-      <View style={{
-        width: 26, height: 12, borderRadius: 3,
-        borderWidth: 1.5, borderColor: border + '66',
-        flexDirection: 'row', padding: 2, gap: 1.5,
-        alignItems: 'center', backgroundColor: C.bgCard,
-      }}>
-        {[0, 1, 2].map(i => (
-          <View key={i} style={{ flex: 1, height: '100%', borderRadius: 1, backgroundColor: getCell(i) }} />
-        ))}
-      </View>
-      <View style={{ width: 2, height: 6, borderRadius: 1, backgroundColor: border + '88' }} />
-    </View>
-  );
 }
 
 function IndicCell({ children, alertColor }) {
@@ -56,9 +31,7 @@ function IndicCell({ children, alertColor }) {
 }
 
 function Dot({ color }) {
-  return (
-    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
-  );
+  return <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />;
 }
 
 function Label({ text }) {
@@ -69,24 +42,50 @@ function Label({ text }) {
   );
 }
 
+// ── Battery dashes (3 tirets, un par batterie) ───────────
+
+function BatteryDashes({ batteries }) {
+  // Toujours 3 slots
+  const slots = [null, null, null];
+  (batteries ?? []).forEach(b => {
+    const idx = (b.slot ?? 1) - 1;
+    if (idx >= 0 && idx < 3) slots[idx] = b;
+  });
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 3, alignItems: 'center' }}>
+      {slots.map((b, i) => {
+        const color = b ? battColor(b.soc) : C.textMuted + '33';
+        return (
+          <View key={i} style={{
+            width: 14, height: 5, borderRadius: 2,
+            backgroundColor: color,
+          }} />
+        );
+      })}
+    </View>
+  );
+}
+
+// ── Scooter card ─────────────────────────────────────────
+
 function ScooterCard({ item, onPress, onEdit, onDelete }) {
   const sc        = STATUS[item.status] ?? STATUS.offline;
   const tamper    = item.tamper_points ?? [false, false, false];
   const anyTamper = tamper.some(Boolean);
   const alertBorder = (anyTamper || item.fallen) ? C.danger + '44' : C.border;
+  const batteries = item._batteries ?? [];
 
   return (
     <TouchableOpacity
       onPress={() => onPress(item)}
       activeOpacity={0.75}
       style={{
-        backgroundColor: C.bgCard,
-        borderRadius: 20,
-        padding: 18,
-        borderWidth: 1,
-        borderColor: alertBorder,
+        backgroundColor: C.bgCard, borderRadius: 20,
+        padding: 18, borderWidth: 1, borderColor: alertBorder,
       }}
     >
+      {/* Header */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <View>
           <Text style={{ fontSize: 17, fontWeight: '800', color: C.white }}>{item.name}</Text>
@@ -106,17 +105,16 @@ function ScooterCard({ item, onPress, onEdit, onDelete }) {
         </View>
       </View>
 
-      {/* ── Toutes les cellules sur une seule ligne ── */}
+      {/* 5 cellules indicateurs */}
       <View style={{ flexDirection: 'row', gap: 6 }}>
+        {/* BATT : 3 tirets colores */}
         <IndicCell>
           <Text style={{ fontSize: 16 }}>🔋</Text>
-          <BatteryIcon value={item.battery} />
-          <Text style={{ fontSize: 11, fontWeight: '800', color: battColor(item.battery) }}>
-            {item.battery != null ? `${item.battery}%` : '—'}
-          </Text>
+          <BatteryDashes batteries={batteries} />
           <Label text="Batt." />
         </IndicCell>
 
+        {/* SABOTAGE */}
         <IndicCell alertColor={anyTamper ? C.danger : null}>
           <Text style={{ fontSize: 16 }}>🚨</Text>
           <View style={{ flexDirection: 'row', gap: 3, alignItems: 'center' }}>
@@ -130,15 +128,17 @@ function ScooterCard({ item, onPress, onEdit, onDelete }) {
           <Label text="Sabotage" />
         </IndicCell>
 
+        {/* ALARME */}
         <IndicCell>
           <Text style={{ fontSize: 16 }}>🔒</Text>
           <Dot color={item.alarm ? C.success : C.danger} />
           <Text style={{ fontSize: 9, fontWeight: '700', color: item.alarm ? C.success : C.danger }}>
-            {item.alarm ? 'Armée' : 'OFF'}
+            {item.alarm ? 'Armee' : 'OFF'}
           </Text>
           <Label text="Alarme" />
         </IndicCell>
 
+        {/* CHUTE */}
         <IndicCell alertColor={item.fallen ? C.danger : null}>
           <Text style={{
             fontSize: 16,
@@ -151,6 +151,7 @@ function ScooterCard({ item, onPress, onEdit, onDelete }) {
           <Label text="Chute" />
         </IndicCell>
 
+        {/* ROUES */}
         <IndicCell alertColor={wheelColor(item.wheel_front) === C.danger || wheelColor(item.wheel_rear) === C.danger ? C.danger : null}>
           <Text style={{ fontSize: 16 }}>⚙️</Text>
           <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
@@ -174,24 +175,17 @@ function ScooterCard({ item, onPress, onEdit, onDelete }) {
         </IndicCell>
       </View>
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+      {/* Footer */}
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginTop: 12 }}>
         <Text style={{ fontSize: 10, color: C.textMuted }}>
-          {item.last_update ? `Mis à jour ${timeAgo(item.last_update)}` : 'Aucune donnée'}
+          {item.last_update ? `Mis a jour ${timeAgo(item.last_update)}` : 'Aucune donnee'} →
         </Text>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <TouchableOpacity onPress={() => onEdit(item)}
-            style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
-            <Text style={{ fontSize: 12 }}>✏️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => onDelete(item)}
-            style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.dangerDim, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.danger + '44' }}>
-            <Text style={{ fontSize: 12 }}>🗑️</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </TouchableOpacity>
   );
 }
+
+// ── Modal formulaire scooter ─────────────────────────────
 
 function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   const isEdit = !!initial;
@@ -240,18 +234,18 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 24 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <Text style={{ fontSize: 22, fontWeight: '900', color: C.white, letterSpacing: -0.5 }}>
-              {isEdit ? 'Modifier 🛵' : 'Nouveau 🛵'}
+              {isEdit ? 'Modifier' : 'Nouveau scooter'}
             </Text>
             <TouchableOpacity onPress={onClose}
               style={{ backgroundColor: C.bgElevated, borderRadius: 20, width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ color: C.textMuted, fontSize: 16 }}>✕</Text>
+              <Text style={{ color: C.textMuted, fontSize: 16 }}>X</Text>
             </TouchableOpacity>
           </View>
 
           {[
-            { label: 'Nom *',      value: name,      set: setName,      placeholder: 'ex: Scooter 1'     },
-            { label: 'Modèle',     value: model,     set: setModel,     placeholder: 'ex: Niu NQi GT Pro' },
-            { label: 'Référence',  value: reference, set: setReference, placeholder: 'ex: SCT-001'        },
+            { label: 'Nom *',      value: name,      set: setName,      placeholder: 'ex: Scooter 1'      },
+            { label: 'Modele',      value: model,     set: setModel,     placeholder: 'ex: Niu NQi GT Pro' },
+            { label: 'Reference',   value: reference, set: setReference, placeholder: 'ex: SCT-001'        },
           ].map(({ label, value, set, placeholder }) => (
             <View key={label}>
               <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>{label}</Text>
@@ -275,6 +269,8 @@ function ScooterFormModal({ visible, onClose, onSaved, initial }) {
   );
 }
 
+// ── Modal deconnexion ────────────────────────────────────
+
 function LogoutModal({ visible, onClose, onConfirm, loading }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -284,19 +280,18 @@ function LogoutModal({ visible, onClose, onConfirm, loading }) {
       >
         <TouchableOpacity activeOpacity={1}
           style={{ backgroundColor: C.bgCard, borderRadius: 24, padding: 28, width: '100%', borderWidth: 1, borderColor: C.border }}>
-          <Text style={{ fontSize: 28, textAlign: 'center', marginBottom: 12 }}>👋</Text>
           <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, textAlign: 'center', marginBottom: 8 }}>
-            Déconnexion
+            Deconnexion
           </Text>
           <Text style={{ fontSize: 13, color: C.textSecondary, textAlign: 'center', marginBottom: 28, lineHeight: 20 }}>
-            Vous allez être déconnecté de votre compte FlotteManager.
+            Vous allez etre deconnecte de votre compte.
           </Text>
 
           <TouchableOpacity onPress={onConfirm} disabled={loading} activeOpacity={0.85}
             style={{ backgroundColor: C.dangerDim, borderRadius: 14, padding: 14, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: C.danger + '55' }}>
             {loading
               ? <ActivityIndicator color={C.danger} />
-              : <Text style={{ fontSize: 14, fontWeight: '800', color: C.danger }}>Confirmer la déconnexion</Text>
+              : <Text style={{ fontSize: 14, fontWeight: '800', color: C.danger }}>Confirmer</Text>
             }
           </TouchableOpacity>
 
@@ -310,6 +305,8 @@ function LogoutModal({ visible, onClose, onConfirm, loading }) {
   );
 }
 
+// ── Ecran principal ──────────────────────────────────────
+
 export default function HomeScreen({ navigation }) {
   const [scooters,        setScooters]        = useState([]);
   const [loading,         setLoading]         = useState(true);
@@ -320,9 +317,14 @@ export default function HomeScreen({ navigation }) {
   const [userEmail,       setUserEmail]       = useState('');
 
   const fetchScooters = async () => {
-    const { data: scooterData, error } = await supabase.from('scooters').select('*');
-    if (error) { console.error('Supabase error:', error); setLoading(false); return; }
+    // Scooters + batteries (pour les tirets colores)
+    const { data: scooterData, error } = await supabase
+      .from('scooters')
+      .select('*, batteries(id, soc, capacity_ah, slot)');
 
+    if (error) { console.error('Supabase:', error); setLoading(false); return; }
+
+    // Telemetry pour chaque scooter (tamper, alarm, fallen, roues...)
     const ids = (scooterData ?? []).map(s => s.id);
     let telMap = {};
     if (ids.length > 0) {
@@ -342,7 +344,22 @@ export default function HomeScreen({ navigation }) {
 
     setScooters((scooterData ?? []).map(s => {
       const t = telMap[s.id];
-      return t ? { ...s, ...t, id: s.id, last_update: t.recorded_at } : s;
+      const batts = s.batteries ?? [];
+      return {
+        ...s,
+        ...(t ? {
+          tamper_points: t.tamper_points,
+          alarm: t.alarm,
+          fallen: t.fallen,
+          wheel_front: t.wheel_front,
+          wheel_rear: t.wheel_rear,
+          status: t.status ?? s.status ?? 'offline',
+          last_update: t.recorded_at,
+        } : {
+          status: s.status ?? 'offline',
+        }),
+        _batteries: batts,
+      };
     }));
     setLoading(false);
   };
@@ -354,18 +371,27 @@ export default function HomeScreen({ navigation }) {
       setUserEmail(data?.user?.email ?? '');
     });
 
-    const channel = supabase
-      .channel('telemetry-all')
+    // Realtime : telemetry, batteries, scooters
+    const ch1 = supabase.channel('home-tel')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' },
-        payload => {
-          const { id: _tid, scooter_id, ...tel } = payload.new;
-          setScooters(prev =>
-            prev.map(s => s.id === scooter_id ? { ...s, ...tel, last_update: tel.recorded_at } : s)
-          );
-        }
-      )
+        () => fetchScooters())
       .subscribe();
-    return () => supabase.removeChannel(channel);
+
+    const ch2 = supabase.channel('home-batt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries' },
+        () => fetchScooters())
+      .subscribe();
+
+    const ch3 = supabase.channel('home-scoot')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scooters' },
+        () => fetchScooters())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ch1);
+      supabase.removeChannel(ch2);
+      supabase.removeChannel(ch3);
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -393,7 +419,7 @@ export default function HomeScreen({ navigation }) {
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={C.accent} />
-          <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 12 }}>Connexion…</Text>
+          <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 12 }}>Connexion...</Text>
         </View>
       ) : (
         <FlatList
@@ -415,7 +441,7 @@ export default function HomeScreen({ navigation }) {
                     {scooters.length} scooter{scooters.length > 1 ? 's' : ''}
                   </Text>
                   {userEmail ? (
-                    <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>👤 {userEmail}</Text>
+                    <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>{userEmail}</Text>
                   ) : null}
                 </View>
 
