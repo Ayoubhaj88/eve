@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "scooter-monitor",
-    "slug": "scooter-monitor",
+    "slug": "eve-mobility",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,6 +24,18 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "23c7769a-c093-4de5-b8bc-256b38f54151"
+      }
+    },
+    "owner": "ayoubhajs-organization",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/23c7769a-c093-4de5-b8bc-256b38f54151"
     }
   }
 }

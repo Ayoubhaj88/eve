@@ -94,7 +94,7 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial, usedS
                     opacity: taken ? 0.3 : 1,
                   }}>
                   <Text style={{ fontSize: 14, fontWeight: '800', color: active ? C.bg : C.white }}>
-                    Slot {s}
+                    Batterie {s}
                   </Text>
                   {taken && <Text style={{ fontSize: 8, color: C.textMuted, marginTop: 2 }}>Occupe</Text>}
                 </TouchableOpacity>
@@ -128,7 +128,7 @@ function BatteryCard({ item, onEdit, onDelete }) {
       {/* Header */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>🔋 Slot {item.slot ?? '?'}</Text>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>🔋 Batterie {item.slot ?? '?'}</Text>
           <Text style={{ fontSize: 11, color: C.accent, marginTop: 4, letterSpacing: 0.5,
             fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
             #{item.serial_number}
