@@ -116,9 +116,32 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial, usedS
 
 // ── Battery card (simplifie) ────────────────────────────────
 
+function BmsStatRow({ label, value, unit, color }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Text style={{ fontSize: 10, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
+        {label}
+      </Text>
+      <Text style={{ fontSize: 13, fontWeight: '800', color: color ?? C.white }}>
+        {value != null ? `${value}${unit ? ' ' + unit : ''}` : '—'}
+      </Text>
+    </View>
+  );
+}
+
 function BatteryCard({ item, onEdit, onDelete }) {
   const soc = item.soc;
   const color = battColor(soc);
+
+  const statusColor = {
+    charging:    C.success,
+    discharging: C.accent,
+    idle:        C.textMuted,
+    error:       C.danger,
+  }[item.bms_status] ?? C.textMuted;
+
+  const protFlags = item.protection ?? {};
+  const hasAlert = Object.values(protFlags).some(Boolean);
 
   return (
     <View style={{
@@ -134,7 +157,17 @@ function BatteryCard({ item, onEdit, onDelete }) {
             #{item.serial_number}
           </Text>
         </View>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          {item.bms_status && (
+            <View style={{
+              paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+              backgroundColor: statusColor + '22', borderWidth: 1, borderColor: statusColor + '44',
+            }}>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: statusColor, textTransform: 'uppercase' }}>
+                {item.bms_status}
+              </Text>
+            </View>
+          )}
           <TouchableOpacity onPress={() => onEdit(item)}
             style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center' }}>
             <Text style={{ fontSize: 12 }}>✏️</Text>
@@ -165,6 +198,214 @@ function BatteryCard({ item, onEdit, onDelete }) {
         </View>
         <View style={{ width: 3, height: 7, borderRadius: 1, backgroundColor: color + '99' }} />
       </View>
+
+      {/* Separateur */}
+      <View style={{ height: 1, backgroundColor: C.border }} />
+
+      {/* Données BMS principales */}
+      <View style={{ gap: 6 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {[
+            { label: 'Tension',  value: item.voltage,   unit: 'V',  color: C.accent },
+            { label: 'Courant',  value: item.current_a, unit: 'A',  color: C.warning },
+            { label: 'Puissance',value: item.power_w,   unit: 'W',  color: C.white },
+          ].map(({ label, value, unit, color: c }) => (
+            <View key={label} style={{
+              flex: 1, backgroundColor: C.bgElevated, borderRadius: 10,
+              padding: 10, alignItems: 'center', gap: 3,
+              borderWidth: 1, borderColor: C.border,
+            }}>
+              <Text style={{ fontSize: 9, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                {label}
+              </Text>
+              <Text style={{ fontSize: 15, fontWeight: '900', color: c }}>
+                {value != null ? value.toFixed(1) : '—'}
+              </Text>
+              <Text style={{ fontSize: 8, color: C.textMuted }}>{unit}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={{
+          backgroundColor: C.bgElevated, borderRadius: 10, padding: 10,
+          gap: 6, borderWidth: 1, borderColor: C.border,
+        }}>
+          <BmsStatRow label="Température"  value={item.temperature != null ? item.temperature?.toFixed(1) : null} unit="°C" color={item.temperature > 45 ? C.danger : C.white} />
+          <BmsStatRow label="SOH"          value={item.soh != null ? item.soh?.toFixed(0) + '%' : null} />
+          <BmsStatRow label="Cycles"       value={item.cycles} />
+        </View>
+      </View>
+
+      {/* Tensions cellules */}
+      {item.cell_voltages?.length > 0 ? (
+        <View style={{ gap: 6 }}>
+          <Text style={{ fontSize: 9, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.2 }}>
+            Cellules ({item.cell_voltages.length})
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {item.cell_voltages.map((v, i) => (
+              <View key={i} style={{
+                backgroundColor: C.bgElevated, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4,
+                borderWidth: 1, borderColor: C.border,
+              }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: C.white }}>
+                  C{i + 1}: {v.toFixed(3)}V
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : (
+        <View style={{ gap: 6 }}>
+          <Text style={{ fontSize: 9, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.2 }}>
+            Cellules
+          </Text>
+          <Text style={{ fontSize: 12, color: C.textMuted + '88', fontStyle: 'italic' }}>— en attente ESP32</Text>
+        </View>
+      )}
+
+      {/* Alertes protection */}
+      {hasAlert ? (
+        <View style={{
+          backgroundColor: C.dangerDim, borderRadius: 10, padding: 10,
+          borderWidth: 1, borderColor: C.danger + '44', gap: 4,
+        }}>
+          <Text style={{ fontSize: 9, fontWeight: '800', color: C.danger, textTransform: 'uppercase', letterSpacing: 1 }}>
+            ⚠ Protections actives
+          </Text>
+          {protFlags.overvoltage           && <Text style={{ fontSize: 10, color: C.danger }}>• Surtension</Text>}
+          {protFlags.undervoltage          && <Text style={{ fontSize: 10, color: C.danger }}>• Sous-tension</Text>}
+          {protFlags.overcurrent_charge    && <Text style={{ fontSize: 10, color: C.danger }}>• Surcourant charge</Text>}
+          {protFlags.overcurrent_discharge && <Text style={{ fontSize: 10, color: C.danger }}>• Surcourant décharge</Text>}
+          {protFlags.overtemp              && <Text style={{ fontSize: 10, color: C.danger }}>• Surchauffe</Text>}
+          {protFlags.short_circuit         && <Text style={{ fontSize: 10, color: C.danger }}>• Court-circuit</Text>}
+        </View>
+      ) : (
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 6,
+          backgroundColor: C.successDim, borderRadius: 10, padding: 10,
+          borderWidth: 1, borderColor: C.success + '33',
+        }}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.success }} />
+          <Text style={{ fontSize: 9, fontWeight: '700', color: C.success }}>Aucune alerte protection</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ── TPMS card ──────────────────────────────────────────────
+
+function wheelColor(v) {
+  if (v == null) return C.textMuted;
+  if (v < 1.5)  return C.danger;
+  if (v < 2.2)  return C.warning;
+  return C.success;
+}
+
+function TpmsCard({ telemetry }) {
+  const front = telemetry?.wheel_front;
+  const rear  = telemetry?.wheel_rear;
+  const frontColor = wheelColor(front);
+  const rearColor  = wheelColor(rear);
+  const hasAlert = (front != null && front < 1.5) || (rear != null && rear < 1.5);
+
+  return (
+    <View style={{
+      backgroundColor: C.bgCard, borderRadius: 18,
+      borderWidth: 1, borderColor: hasAlert ? C.danger + '44' : C.border,
+      padding: 18, gap: 14,
+    }}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 20 }}>⚙️</Text>
+          <Text style={{ fontSize: 15, fontWeight: '800', color: C.white }}>TPMS</Text>
+        </View>
+        {hasAlert ? (
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 5,
+            backgroundColor: C.dangerDim, borderRadius: 10,
+            paddingHorizontal: 10, paddingVertical: 4,
+            borderWidth: 1, borderColor: C.danger + '44',
+          }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.danger }} />
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.danger }}>PRESSION BASSE</Text>
+          </View>
+        ) : front != null || rear != null ? (
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 5,
+            backgroundColor: C.successDim, borderRadius: 10,
+            paddingHorizontal: 10, paddingVertical: 4,
+            borderWidth: 1, borderColor: C.success + '44',
+          }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.success }} />
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.success }}>Normal</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Jauges roues */}
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        {[
+          { label: 'Avant', value: front, color: frontColor },
+          { label: 'Arrière', value: rear,  color: rearColor  },
+        ].map(({ label, value, color }) => {
+          const pct = value != null ? Math.min((value / 4.0) * 100, 100) : 0;
+          return (
+            <View key={label} style={{
+              flex: 1, backgroundColor: C.bgElevated, borderRadius: 14,
+              padding: 14, alignItems: 'center', gap: 8,
+              borderWidth: 1, borderColor: color + '44',
+            }}>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.2 }}>
+                {label}
+              </Text>
+              <Text style={{ fontSize: 28, fontWeight: '900', color, letterSpacing: -1 }}>
+                {value != null ? value.toFixed(1) : '—'}
+              </Text>
+              <Text style={{ fontSize: 9, color: C.textMuted }}>bar</Text>
+              {/* Jauge verticale */}
+              <View style={{
+                width: 8, height: 48, borderRadius: 4,
+                backgroundColor: C.bg, borderWidth: 1, borderColor: color + '44',
+                overflow: 'hidden', justifyContent: 'flex-end',
+              }}>
+                <View style={{
+                  width: '100%', height: pct + '%',
+                  backgroundColor: color, borderRadius: 4,
+                }} />
+              </View>
+              <Text style={{
+                fontSize: 9, fontWeight: '700',
+                color: color === C.danger ? C.danger : color === C.warning ? C.warning : C.textMuted,
+              }}>
+                {value == null ? '—' : value < 1.5 ? 'Critique' : value < 2.2 ? 'Bas' : 'OK'}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Légende seuils */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
+        {[
+          { color: C.success, label: '≥ 2.2 bar  OK'     },
+          { color: C.warning, label: '1.5–2.2  Bas'  },
+          { color: C.danger,  label: '< 1.5  Critique' },
+        ].map(({ color, label }) => (
+          <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+            <Text style={{ fontSize: 8, color: C.textMuted }}>{label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {telemetry?.recorded_at && (
+        <Text style={{ fontSize: 9, color: C.textMuted, textAlign: 'right' }}>
+          {timeAgo(telemetry.recorded_at)}
+        </Text>
+      )}
     </View>
   );
 }
@@ -497,6 +738,15 @@ export default function DashboardScreen({ route, navigation }) {
           threshold={fallThreshold}
           onChangeThreshold={updateThreshold}
         />
+
+        {/* Header TPMS */}
+        <View style={{ marginTop: 28, marginBottom: 16 }}>
+          <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+            Pression des pneus
+          </Text>
+        </View>
+
+        <TpmsCard telemetry={telemetry} />
 
         <View style={{ height: 40 }} />
       </ScrollView>
