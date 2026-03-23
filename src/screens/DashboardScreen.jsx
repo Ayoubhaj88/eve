@@ -296,19 +296,29 @@ function BatteryCard({ item, onEdit, onDelete }) {
 
 // ── TPMS card ──────────────────────────────────────────────
 
-function wheelColor(v) {
-  if (v == null) return C.textMuted;
-  if (v < 1.5)  return C.danger;
-  if (v < 2.2)  return C.warning;
+function wheelColor(v, threshold) {
+  if (v == null)       return C.textMuted;
+  if (v < threshold)   return C.danger;
+  if (v < threshold * 1.15) return C.warning;   // zone orange : 0–15% au-dessus du seuil
   return C.success;
 }
 
-function TpmsCard({ telemetry }) {
+function TpmsCard({ telemetry, threshold, onChangeThreshold }) {
   const front = telemetry?.wheel_front;
   const rear  = telemetry?.wheel_rear;
-  const frontColor = wheelColor(front);
-  const rearColor  = wheelColor(rear);
-  const hasAlert = (front != null && front < 1.5) || (rear != null && rear < 1.5);
+  const frontColor = wheelColor(front, threshold);
+  const rearColor  = wheelColor(rear,  threshold);
+  const hasAlert = (front != null && front < threshold) || (rear != null && rear < threshold);
+
+  const [editing,      setEditing]      = useState(false);
+  const [inputVal,     setInputVal]     = useState(String(threshold));
+
+  const save = async () => {
+    const val = parseFloat(inputVal);
+    if (isNaN(val) || val <= 0 || val > 6) { alertOk('Erreur', 'Seuil invalide (0–6 bar)'); return; }
+    await onChangeThreshold(val);
+    setEditing(false);
+  };
 
   return (
     <View style={{
@@ -348,8 +358,8 @@ function TpmsCard({ telemetry }) {
       {/* Jauges roues */}
       <View style={{ flexDirection: 'row', gap: 12 }}>
         {[
-          { label: 'Avant', value: front, color: frontColor },
-          { label: 'Arrière', value: rear,  color: rearColor  },
+          { label: 'Avant',   value: front, color: frontColor },
+          { label: 'Arriere', value: rear,  color: rearColor  },
         ].map(({ label, value, color }) => {
           const pct = value != null ? Math.min((value / 4.0) * 100, 100) : 0;
           return (
@@ -371,28 +381,62 @@ function TpmsCard({ telemetry }) {
                 backgroundColor: C.bg, borderWidth: 1, borderColor: color + '44',
                 overflow: 'hidden', justifyContent: 'flex-end',
               }}>
-                <View style={{
-                  width: '100%', height: pct + '%',
-                  backgroundColor: color, borderRadius: 4,
-                }} />
+                <View style={{ width: '100%', height: pct + '%', backgroundColor: color, borderRadius: 4 }} />
               </View>
-              <Text style={{
-                fontSize: 9, fontWeight: '700',
-                color: color === C.danger ? C.danger : color === C.warning ? C.warning : C.textMuted,
-              }}>
-                {value == null ? '—' : value < 1.5 ? 'Critique' : value < 2.2 ? 'Bas' : 'OK'}
+              <Text style={{ fontSize: 9, fontWeight: '700', color }}>
+                {value == null ? '—' : value < threshold ? 'Critique' : value < threshold * 1.15 ? 'Bas' : 'OK'}
               </Text>
             </View>
           );
         })}
       </View>
 
-      {/* Légende seuils */}
+      {/* Seuil configurable */}
+      <View style={{
+        backgroundColor: C.bgElevated, borderRadius: 12,
+        padding: 12, borderWidth: 1, borderColor: C.border,
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
+          Seuil d'alerte
+        </Text>
+        {editing ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TextInput
+              value={inputVal}
+              onChangeText={setInputVal}
+              keyboardType="numeric"
+              style={{
+                backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+                color: C.white, fontSize: 13, fontWeight: '700',
+                borderWidth: 1, borderColor: C.accent, minWidth: 60, textAlign: 'center',
+              }}
+            />
+            <Text style={{ fontSize: 11, color: C.textMuted }}>bar</Text>
+            <TouchableOpacity onPress={save}
+              style={{ backgroundColor: C.accent, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: C.bg }}>OK</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setEditing(false); setInputVal(String(threshold)); }}>
+              <Text style={{ fontSize: 12, color: C.textMuted }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => { setInputVal(String(threshold)); setEditing(true); }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: C.warning }}>{threshold} bar</Text>
+            <Text style={{ fontSize: 10 }}>✏️</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Légende */}
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
         {[
-          { color: C.success, label: '≥ 2.2 bar  OK'     },
-          { color: C.warning, label: '1.5–2.2  Bas'  },
-          { color: C.danger,  label: '< 1.5  Critique' },
+          { color: C.success, label: `≥ ${(threshold * 1.15).toFixed(1)} bar  OK` },
+          { color: C.warning, label: `${threshold}–${(threshold * 1.15).toFixed(1)}  Bas` },
+          { color: C.danger,  label: `< ${threshold}  Critique` },
         ].map(({ color, label }) => (
           <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
@@ -568,6 +612,7 @@ export default function DashboardScreen({ route, navigation }) {
   const [editingBatt,    setEditingBatt]    = useState(null);
   const [telemetry,      setTelemetry]      = useState(null);
   const [fallThreshold,  setFallThreshold]  = useState(scooter?.fall_threshold ?? 2.5);
+  const [tpmsThreshold,  setTpmsThreshold]  = useState(scooter?.tpms_threshold ?? 2.0);
 
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
@@ -600,6 +645,13 @@ export default function DashboardScreen({ route, navigation }) {
     setFallThreshold(val);
   };
 
+  const updateTpmsThreshold = async (val) => {
+    const { error } = await supabase
+      .from('scooters').update({ tpms_threshold: val }).eq('id', scooter.id);
+    if (error) { alertOk('Erreur', error.message); return; }
+    setTpmsThreshold(val);
+  };
+
   const deleteBattery = (item) => {
     alertConfirm('Supprimer', `Supprimer "${item.serial_number}" ?`, async () => {
       const { error } = await supabase.from('batteries').delete().eq('id', item.id);
@@ -613,9 +665,12 @@ export default function DashboardScreen({ route, navigation }) {
     fetchBatteries();
     fetchTelemetry();
 
-    // Fetch threshold from DB
-    supabase.from('scooters').select('fall_threshold').eq('id', scooter.id).single()
-      .then(({ data }) => { if (data?.fall_threshold != null) setFallThreshold(data.fall_threshold); });
+    // Fetch thresholds from DB
+    supabase.from('scooters').select('fall_threshold, tpms_threshold').eq('id', scooter.id).single()
+      .then(({ data }) => {
+        if (data?.fall_threshold != null) setFallThreshold(data.fall_threshold);
+        if (data?.tpms_threshold != null) setTpmsThreshold(data.tpms_threshold);
+      });
 
     const battCh = supabase.channel('batt-' + scooter.id)
       .on('postgres_changes', {
@@ -746,7 +801,11 @@ export default function DashboardScreen({ route, navigation }) {
           </Text>
         </View>
 
-        <TpmsCard telemetry={telemetry} />
+        <TpmsCard
+          telemetry={telemetry}
+          threshold={tpmsThreshold}
+          onChangeThreshold={updateTpmsThreshold}
+        />
 
         <View style={{ height: 40 }} />
       </ScrollView>
