@@ -9,10 +9,10 @@ import { C, STATUS, battColor, timeAgo, alertOk, alertConfirm } from '../constan
 
 // ── Helpers ──────────────────────────────────────────────
 
-function wheelColor(v) {
-  if (v == null) return C.textMuted;
-  if (v < 1.5)  return C.danger;
-  if (v < 2.2)  return C.warning;
+function wheelColor(v, threshold = 2.0) {
+  if (v == null)            return C.textMuted;
+  if (v < threshold)        return C.danger;
+  if (v < threshold * 1.15) return C.warning;
   return C.success;
 }
 
@@ -74,7 +74,8 @@ function ScooterCard({ item, onPress, onEdit, onDelete }) {
   const tamper    = item.tamper_points ?? [false, false, false];
   const anyTamper = tamper.some(Boolean);
   const alertBorder = (anyTamper || item.fallen) ? C.danger + '44' : C.border;
-  const batteries = item._batteries ?? [];
+  const batteries  = item._batteries ?? [];
+  const tpmsThresh = item.tpms_threshold ?? 2.0;
 
   return (
     <TouchableOpacity
@@ -152,20 +153,20 @@ function ScooterCard({ item, onPress, onEdit, onDelete }) {
         </IndicCell>
 
         {/* ROUES */}
-        <IndicCell alertColor={wheelColor(item.wheel_front) === C.danger || wheelColor(item.wheel_rear) === C.danger ? C.danger : null}>
+        <IndicCell alertColor={wheelColor(item.wheel_front, tpmsThresh) === C.danger || wheelColor(item.wheel_rear, tpmsThresh) === C.danger ? C.danger : null}>
           <Text style={{ fontSize: 16 }}>⚙️</Text>
           <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
             <View style={{ alignItems: 'center', gap: 2 }}>
-              <Dot color={wheelColor(item.wheel_front)} />
-              <Text style={{ fontSize: 8, fontWeight: '700', color: wheelColor(item.wheel_front) }}>
+              <Dot color={wheelColor(item.wheel_front, tpmsThresh)} />
+              <Text style={{ fontSize: 8, fontWeight: '700', color: wheelColor(item.wheel_front, tpmsThresh) }}>
                 {item.wheel_front != null ? `${item.wheel_front}b` : '—'}
               </Text>
               <Text style={{ fontSize: 6, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>AV</Text>
             </View>
             <View style={{ width: 1, height: 20, backgroundColor: C.border }} />
             <View style={{ alignItems: 'center', gap: 2 }}>
-              <Dot color={wheelColor(item.wheel_rear)} />
-              <Text style={{ fontSize: 8, fontWeight: '700', color: wheelColor(item.wheel_rear) }}>
+              <Dot color={wheelColor(item.wheel_rear, tpmsThresh)} />
+              <Text style={{ fontSize: 8, fontWeight: '700', color: wheelColor(item.wheel_rear, tpmsThresh) }}>
                 {item.wheel_rear != null ? `${item.wheel_rear}b` : '—'}
               </Text>
               <Text style={{ fontSize: 6, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>AR</Text>
@@ -320,7 +321,7 @@ export default function HomeScreen({ navigation }) {
     // Scooters + batteries (pour les tirets colores)
     const { data: scooterData, error } = await supabase
       .from('scooters')
-      .select('*, batteries(id, serial_number, slot, soc)');
+      .select('*, tpms_threshold, batteries(id, serial_number, slot, soc)');
 
     if (error) { console.error('Supabase:', error); setLoading(false); return; }
 
