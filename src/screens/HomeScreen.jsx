@@ -321,7 +321,7 @@ export default function HomeScreen({ navigation }) {
     // Scooters + batteries (pour les tirets colores)
     const { data: scooterData, error } = await supabase
       .from('scooters')
-      .select('*, tpms_threshold, batteries(id, serial_number, slot, soc)');
+      .select('*, batteries(id, serial_number, slot, soc)');
 
     if (error) { console.error('Supabase:', error); setLoading(false); return; }
 

@@ -666,10 +666,9 @@ export default function DashboardScreen({ route, navigation }) {
     fetchTelemetry();
 
     // Fetch thresholds from DB
-    supabase.from('scooters').select('fall_threshold, tpms_threshold').eq('id', scooter.id).single()
+    supabase.from('scooters').select('fall_threshold').eq('id', scooter.id).single()
       .then(({ data }) => {
         if (data?.fall_threshold != null) setFallThreshold(data.fall_threshold);
-        if (data?.tpms_threshold != null) setTpmsThreshold(data.tpms_threshold);
       });
 
     const battCh = supabase.channel('batt-' + scooter.id)
