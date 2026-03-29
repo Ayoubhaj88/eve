@@ -2,28 +2,30 @@ import { Alert, Platform } from 'react-native';
 
 // ─── Colors ───────────────────────────────────────────────
 export const C = {
-  bg:           '#000000',
-  bgCard:       '#111111',
-  bgElevated:   '#1A1A1A',
-  accent:       '#00E5FF',
-  accentDim:    'rgba(0,229,255,0.08)',
-  accentGlow:   'rgba(0,229,255,0.10)',
+  bg:           '#0A1628',
+  bgCard:       '#0F2044',
+  bgElevated:   '#162550',
+  bgSidebar:    '#0D1E3A',
+  accent:       '#1565C0',
+  accentBright: '#1976D2',
+  accentDim:    'rgba(21,101,192,0.15)',
+  accentGlow:   'rgba(21,101,192,0.20)',
   success:      '#00E676',
   successDim:   'rgba(0,230,118,0.12)',
   warning:      '#FFB300',
   warningDim:   'rgba(255,179,0,0.12)',
   danger:       '#FF1744',
-  dangerDim:    'rgba(255,23,68,0.12)',
+  dangerDim:    'rgba(255,23,68,0.15)',
   white:        '#FFFFFF',
-  textSecondary:'#8A8A9A',
-  textMuted:    '#4A4A5A',
-  border:       '#1A1A1A',
-  borderAccent: 'rgba(0,229,255,0.25)',
+  textSecondary:'#8AAFD4',
+  textMuted:    '#4A6A9A',
+  border:       '#1E3A6E',
+  borderAccent: 'rgba(21,101,192,0.40)',
 };
 
 // ─── Status config ─────────────────────────────────────────
 export const STATUS = {
-  online:   { color: C.success,   bg: C.successDim,  label: 'En ligne'   },
+  online:   { color: C.success,   bg: C.successDim,  label: 'Active'     },
   offline:  { color: C.textMuted, bg: 'transparent', label: 'Hors ligne' },
   charging: { color: C.warning,   bg: C.warningDim,  label: 'En charge'  },
 };

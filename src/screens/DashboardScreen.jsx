@@ -1,38 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { C, STATUS, battColor, timeAgo, alertOk, alertConfirm } from '../constants';
+import { C, STATUS, battColor, timeAgo, alertOk } from '../constants';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, Modal, TextInput,
   KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
+import AttentionModal from '../components/AttentionModal';
 
 const MAX_BATTERIES = 3;
 
-// ── Battery form modal (simplifie) ─────────────────────────
+// ── Section header ──────────────────────────────────────────
+
+function SectionHeader({ title }) {
+  return (
+    <Text style={{
+      fontSize: 9, fontWeight: '800', color: C.textMuted,
+      textTransform: 'uppercase', letterSpacing: 2,
+      marginTop: 28, marginBottom: 14,
+    }}>
+      {title}
+    </Text>
+  );
+}
+
+// ── Battery form modal ──────────────────────────────────────
 
 function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial, usedSlots }) {
   const isEdit = !!initial;
   const [serial,  setSerial]  = useState('');
+  const [bmsId,   setBmsId]   = useState('');
   const [slot,    setSlot]    = useState(1);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (initial) {
       setSerial(initial.serial_number ?? '');
+      setBmsId(initial.bms_id ?? '');
       setSlot(initial.slot ?? 1);
     } else {
-      setSerial('');
+      setSerial(''); setBmsId('');
       const next = [1, 2, 3].find(s => !usedSlots.includes(s)) ?? 1;
       setSlot(next);
     }
   }, [initial, visible]);
 
+  const slotLabel = (s) => s === 3 ? 'Réserve' : `Batterie ${s}`;
+
   const save = async () => {
-    if (!serial.trim()) { alertOk('Erreur', 'Numero de serie obligatoire.'); return; }
+    if (!serial.trim()) { alertOk('Erreur', 'N° Série obligatoire.'); return; }
     setLoading(true);
     try {
-      const row = { serial_number: serial.trim(), slot };
+      const row = { serial_number: serial.trim(), bms_id: bmsId.trim(), slot };
       const { error } = isEdit
         ? await supabase.from('batteries').update(row).eq('id', initial.id)
         : await supabase.from('batteries').insert({ ...row, scooter_id: scooterId });
@@ -47,66 +66,68 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial, usedS
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
         <View style={{
-          backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          backgroundColor: C.accent,
+          borderTopLeftRadius: 28, borderTopRightRadius: 28,
           padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
-          borderTopWidth: 1, borderColor: C.border,
         }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 24 }} />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: C.white }}>
-              {isEdit ? 'Modifier batterie' : 'Nouvelle batterie'}
-            </Text>
-            <TouchableOpacity onPress={onClose}
-              style={{ backgroundColor: C.bgElevated, borderRadius: 20, width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ color: C.textMuted, fontSize: 16 }}>X</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
-            Numero de serie *
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'center', marginBottom: 20 }} />
+          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 20, textAlign: 'center' }}>
+            {isEdit ? 'Modifier' : slotLabel(slot)}
           </Text>
-          <TextInput
-            value={serial} onChangeText={setSerial}
-            placeholder="ex: BAT-2024-001" placeholderTextColor={C.textMuted}
+
+          {!isEdit && (
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              {[1, 2, 3].map(s => {
+                const taken  = usedSlots.includes(s);
+                const active = slot === s;
+                return (
+                  <TouchableOpacity key={s} disabled={taken} onPress={() => setSlot(s)}
+                    style={{
+                      flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+                      backgroundColor: active ? C.white : 'rgba(255,255,255,0.15)',
+                      opacity: taken ? 0.35 : 1,
+                    }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: active ? C.accent : C.white }}>
+                      {slotLabel(s)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+            N° Serie
+          </Text>
+          <TextInput value={serial} onChangeText={setSerial}
+            placeholder="ex: RAF3G5" placeholderTextColor="rgba(255,255,255,0.4)"
             autoCapitalize="characters"
             style={{
-              backgroundColor: C.bgElevated, borderRadius: 14, padding: 14,
-              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border,
-              marginBottom: 16, letterSpacing: 1,
+              backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 15,
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 14,
+            }}
+          />
+
+          <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+            N° BMS
+          </Text>
+          <TextInput value={bmsId} onChangeText={setBmsId}
+            placeholder="xx:xx:xx:xx:xx:xx" placeholderTextColor="rgba(255,255,255,0.4)"
+            autoCapitalize="none"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 15,
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 20,
               fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
             }}
           />
 
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
-            Emplacement
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-            {[1, 2, 3].map(s => {
-              const taken = !isEdit && usedSlots.includes(s);
-              const active = slot === s;
-              return (
-                <TouchableOpacity key={s} disabled={taken}
-                  onPress={() => setSlot(s)}
-                  style={{
-                    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
-                    backgroundColor: active ? C.accent : C.bgElevated,
-                    borderWidth: 1, borderColor: active ? C.accent : C.border,
-                    opacity: taken ? 0.3 : 1,
-                  }}>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: active ? C.bg : C.white }}>
-                    Batterie {s}
-                  </Text>
-                  {taken && <Text style={{ fontSize: 8, color: C.textMuted, marginTop: 2 }}>Occupe</Text>}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
           <TouchableOpacity onPress={save} disabled={loading} activeOpacity={0.8}
-            style={{ backgroundColor: C.accent, borderRadius: 16, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
+            style={{ backgroundColor: C.white, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
             {loading
-              ? <ActivityIndicator color={C.bg} />
-              : <Text style={{ fontSize: 15, fontWeight: '900', color: C.bg }}>{isEdit ? 'Enregistrer' : 'Ajouter'}</Text>}
+              ? <ActivityIndicator color={C.accent} />
+              : <Text style={{ fontSize: 16, fontWeight: '900', color: C.accent }}>Valider</Text>}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -114,489 +135,127 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial, usedS
   );
 }
 
-// ── Battery card (simplifie) ────────────────────────────────
+// ── TPMS form modal ─────────────────────────────────────────
 
-function BmsStatRow({ label, value, unit, color }) {
+function TpmsFormModal({ visible, onClose, onSaved, scooterId, wheel }) {
+  const [tpmsId,  setTpmsId]  = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { if (visible) setTpmsId(''); }, [visible]);
+
+  const save = async () => {
+    if (!tpmsId.trim()) { alertOk('Erreur', 'ID TPMS obligatoire.'); return; }
+    setLoading(true);
+    try {
+      const col = wheel === 'AV' ? 'tpms_id_front' : 'tpms_id_rear';
+      const { error } = await supabase.from('scooters')
+        .update({ [col]: tpmsId.trim() }).eq('id', scooterId);
+      if (error) throw error;
+      onSaved(); onClose();
+    } catch (e) { alertOk('Erreur', e.message); }
+    finally     { setLoading(false); }
+  };
+
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-      <Text style={{ fontSize: 10, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
-        {label}
-      </Text>
-      <Text style={{ fontSize: 13, fontWeight: '800', color: color ?? C.white }}>
-        {value != null ? `${value}${unit ? ' ' + unit : ''}` : '—'}
-      </Text>
-    </View>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
+        <View style={{
+          backgroundColor: C.accent,
+          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+        }}>
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'center', marginBottom: 20 }} />
+          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 20, textAlign: 'center' }}>
+            TPMS {wheel}.
+          </Text>
+
+          <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+            ID :
+          </Text>
+          <TextInput value={tpmsId} onChangeText={setTpmsId}
+            placeholder="ex: RAF3G5" placeholderTextColor="rgba(255,255,255,0.4)"
+            autoCapitalize="characters"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 15,
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 20,
+            }}
+          />
+
+          <TouchableOpacity onPress={save} disabled={loading} activeOpacity={0.8}
+            style={{ backgroundColor: C.white, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
+            {loading
+              ? <ActivityIndicator color={C.accent} />
+              : <Text style={{ fontSize: 16, fontWeight: '900', color: C.accent }}>Valider</Text>}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
+// ── Battery card ─────────────────────────────────────────────
+
 function BatteryCard({ item, onEdit, onDelete }) {
-  const soc = item.soc;
-  const color = battColor(soc);
-
-  const statusColor = {
-    charging:    C.success,
-    discharging: C.accent,
-    idle:        C.textMuted,
-    error:       C.danger,
-  }[item.bms_status] ?? C.textMuted;
-
-  const protFlags = item.protection ?? {};
-  const hasAlert = Object.values(protFlags).some(Boolean);
+  const soc       = item.soc;
+  const color     = battColor(soc);
+  const slotLabel = item.slot === 3 ? 'Réserve' : `Batterie ${item.slot ?? '?'}`;
 
   return (
     <View style={{
-      flex: 1, backgroundColor: C.bgCard, borderRadius: 18,
-      borderWidth: 1, borderColor: C.border, padding: 14, gap: 10,
+      backgroundColor: C.bgCard, borderRadius: 16,
+      borderWidth: 1, borderColor: C.border, padding: 16, gap: 10,
     }}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>🔋 Batterie {item.slot ?? '?'}</Text>
-          <Text style={{ fontSize: 11, color: C.accent, marginTop: 4, letterSpacing: 0.5,
-            fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
-            #{item.serial_number}
-          </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>🔋 {slotLabel}</Text>
+          {item.serial_number ? (
+            <Text style={{ fontSize: 10, color: C.accentBright, marginTop: 3,
+              fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
+              {item.serial_number}
+            </Text>
+          ) : null}
         </View>
-        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-          {item.bms_status && (
-            <View style={{
-              paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
-              backgroundColor: statusColor + '22', borderWidth: 1, borderColor: statusColor + '44',
-            }}>
-              <Text style={{ fontSize: 9, fontWeight: '800', color: statusColor, textTransform: 'uppercase' }}>
-                {item.bms_status}
-              </Text>
-            </View>
-          )}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={() => onEdit(item)}
-            style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ fontSize: 12 }}>✏️</Text>
+            style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 13 }}>✏️</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onDelete(item)}
-            style={{ width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ fontSize: 14, color: C.danger, fontWeight: '800' }}>X</Text>
+            style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.dangerDim, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.danger + '44' }}>
+            <Text style={{ fontSize: 13, color: C.danger, fontWeight: '800' }}>✕</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* SOC */}
       <Text style={{ fontSize: 32, fontWeight: '900', color, letterSpacing: -1 }}>
         {soc != null ? soc.toFixed(0) + '%' : '—'}
       </Text>
 
-      {/* Barre */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-        <View style={{
-          flex: 1, height: 10, borderRadius: 5,
-          borderWidth: 1.5, borderColor: color + '55',
-          backgroundColor: C.bgElevated, overflow: 'hidden', padding: 2,
-        }}>
-          <View style={{
-            width: (soc ?? 0) + '%', height: '100%',
-            borderRadius: 3, backgroundColor: color,
-          }} />
-        </View>
-        <View style={{ width: 3, height: 7, borderRadius: 1, backgroundColor: color + '99' }} />
+      <View style={{ height: 8, borderRadius: 4, backgroundColor: C.bgElevated, overflow: 'hidden', borderWidth: 1, borderColor: color + '44' }}>
+        <View style={{ width: (soc ?? 0) + '%', height: '100%', borderRadius: 4, backgroundColor: color }} />
       </View>
 
-      {/* Separateur */}
-      <View style={{ height: 1, backgroundColor: C.border }} />
-
-      {/* Données BMS principales */}
-      <View style={{ gap: 6 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {[
-            { label: 'Tension',  value: item.voltage,   unit: 'V',  color: C.accent },
-            { label: 'Courant',  value: item.current_a, unit: 'A',  color: C.warning },
-            { label: 'Puissance',value: item.power_w,   unit: 'W',  color: C.white },
-          ].map(({ label, value, unit, color: c }) => (
-            <View key={label} style={{
-              flex: 1, backgroundColor: C.bgElevated, borderRadius: 10,
-              padding: 10, alignItems: 'center', gap: 3,
-              borderWidth: 1, borderColor: C.border,
-            }}>
-              <Text style={{ fontSize: 9, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                {label}
-              </Text>
-              <Text style={{ fontSize: 15, fontWeight: '900', color: c }}>
-                {value != null ? value.toFixed(1) : '—'}
-              </Text>
-              <Text style={{ fontSize: 8, color: C.textMuted }}>{unit}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={{
-          backgroundColor: C.bgElevated, borderRadius: 10, padding: 10,
-          gap: 6, borderWidth: 1, borderColor: C.border,
-        }}>
-          <BmsStatRow label="Température"  value={item.temperature != null ? item.temperature?.toFixed(1) : null} unit="°C" color={item.temperature > 45 ? C.danger : C.white} />
-          <BmsStatRow label="SOH"          value={item.soh != null ? item.soh?.toFixed(0) + '%' : null} />
-          <BmsStatRow label="Cycles"       value={item.cycles} />
-        </View>
-      </View>
-
-      {/* Tensions cellules */}
-      {item.cell_voltages?.length > 0 ? (
-        <View style={{ gap: 6 }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.2 }}>
-            Cellules ({item.cell_voltages.length})
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
-            {item.cell_voltages.map((v, i) => (
-              <View key={i} style={{
-                backgroundColor: C.bgElevated, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4,
-                borderWidth: 1, borderColor: C.border,
-              }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: C.white }}>
-                  C{i + 1}: {v.toFixed(3)}V
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <View style={{ gap: 6 }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.2 }}>
-            Cellules
-          </Text>
-          <Text style={{ fontSize: 12, color: C.textMuted + '88', fontStyle: 'italic' }}>— en attente ESP32</Text>
-        </View>
-      )}
-
-      {/* Alertes protection */}
-      {hasAlert ? (
-        <View style={{
-          backgroundColor: C.dangerDim, borderRadius: 10, padding: 10,
-          borderWidth: 1, borderColor: C.danger + '44', gap: 4,
-        }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: C.danger, textTransform: 'uppercase', letterSpacing: 1 }}>
-            ⚠ Protections actives
-          </Text>
-          {protFlags.overvoltage           && <Text style={{ fontSize: 10, color: C.danger }}>• Surtension</Text>}
-          {protFlags.undervoltage          && <Text style={{ fontSize: 10, color: C.danger }}>• Sous-tension</Text>}
-          {protFlags.overcurrent_charge    && <Text style={{ fontSize: 10, color: C.danger }}>• Surcourant charge</Text>}
-          {protFlags.overcurrent_discharge && <Text style={{ fontSize: 10, color: C.danger }}>• Surcourant décharge</Text>}
-          {protFlags.overtemp              && <Text style={{ fontSize: 10, color: C.danger }}>• Surchauffe</Text>}
-          {protFlags.short_circuit         && <Text style={{ fontSize: 10, color: C.danger }}>• Court-circuit</Text>}
-        </View>
-      ) : (
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', gap: 6,
-          backgroundColor: C.successDim, borderRadius: 10, padding: 10,
-          borderWidth: 1, borderColor: C.success + '33',
-        }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.success }} />
-          <Text style={{ fontSize: 9, fontWeight: '700', color: C.success }}>Aucune alerte protection</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ── TPMS card ──────────────────────────────────────────────
-
-function wheelColor(v, threshold) {
-  if (v == null)       return C.textMuted;
-  if (v < threshold)   return C.danger;
-  if (v < threshold * 1.15) return C.warning;   // zone orange : 0–15% au-dessus du seuil
-  return C.success;
-}
-
-function TpmsCard({ telemetry, threshold, onChangeThreshold }) {
-  const front = telemetry?.wheel_front;
-  const rear  = telemetry?.wheel_rear;
-  const frontColor = wheelColor(front, threshold);
-  const rearColor  = wheelColor(rear,  threshold);
-  const hasAlert = (front != null && front < threshold) || (rear != null && rear < threshold);
-
-  const [editing,      setEditing]      = useState(false);
-  const [inputVal,     setInputVal]     = useState(String(threshold));
-
-  const save = async () => {
-    const val = parseFloat(inputVal);
-    if (isNaN(val) || val <= 0 || val > 6) { alertOk('Erreur', 'Seuil invalide (0–6 bar)'); return; }
-    await onChangeThreshold(val);
-    setEditing(false);
-  };
-
-  return (
-    <View style={{
-      backgroundColor: C.bgCard, borderRadius: 18,
-      borderWidth: 1, borderColor: hasAlert ? C.danger + '44' : C.border,
-      padding: 18, gap: 14,
-    }}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 20 }}>⚙️</Text>
-          <Text style={{ fontSize: 15, fontWeight: '800', color: C.white }}>TPMS</Text>
-        </View>
-        {hasAlert ? (
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 5,
-            backgroundColor: C.dangerDim, borderRadius: 10,
-            paddingHorizontal: 10, paddingVertical: 4,
-            borderWidth: 1, borderColor: C.danger + '44',
-          }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.danger }} />
-            <Text style={{ fontSize: 9, fontWeight: '700', color: C.danger }}>PRESSION BASSE</Text>
-          </View>
-        ) : front != null || rear != null ? (
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 5,
-            backgroundColor: C.successDim, borderRadius: 10,
-            paddingHorizontal: 10, paddingVertical: 4,
-            borderWidth: 1, borderColor: C.success + '44',
-          }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.success }} />
-            <Text style={{ fontSize: 9, fontWeight: '700', color: C.success }}>Normal</Text>
-          </View>
-        ) : null}
-      </View>
-
-      {/* Jauges roues */}
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        {[
-          { label: 'Avant',   value: front, color: frontColor },
-          { label: 'Arriere', value: rear,  color: rearColor  },
-        ].map(({ label, value, color }) => {
-          const pct = value != null ? Math.min((value / 4.0) * 100, 100) : 0;
-          return (
-            <View key={label} style={{
-              flex: 1, backgroundColor: C.bgElevated, borderRadius: 14,
-              padding: 14, alignItems: 'center', gap: 8,
-              borderWidth: 1, borderColor: color + '44',
-            }}>
-              <Text style={{ fontSize: 9, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.2 }}>
-                {label}
-              </Text>
-              <Text style={{ fontSize: 28, fontWeight: '900', color, letterSpacing: -1 }}>
-                {value != null ? value.toFixed(1) : '—'}
-              </Text>
-              <Text style={{ fontSize: 9, color: C.textMuted }}>bar</Text>
-              {/* Jauge verticale */}
-              <View style={{
-                width: 8, height: 48, borderRadius: 4,
-                backgroundColor: C.bg, borderWidth: 1, borderColor: color + '44',
-                overflow: 'hidden', justifyContent: 'flex-end',
-              }}>
-                <View style={{ width: '100%', height: pct + '%', backgroundColor: color, borderRadius: 4 }} />
-              </View>
-              <Text style={{ fontSize: 9, fontWeight: '700', color }}>
-                {value == null ? '—' : value < threshold ? 'Critique' : value < threshold * 1.15 ? 'Bas' : 'OK'}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-
-      {/* Seuil configurable */}
-      <View style={{
-        backgroundColor: C.bgElevated, borderRadius: 12,
-        padding: 12, borderWidth: 1, borderColor: C.border,
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      }}>
-        <Text style={{ fontSize: 10, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
-          Seuil d'alerte
-        </Text>
-        {editing ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TextInput
-              value={inputVal}
-              onChangeText={setInputVal}
-              keyboardType="numeric"
-              style={{
-                backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
-                color: C.white, fontSize: 13, fontWeight: '700',
-                borderWidth: 1, borderColor: C.accent, minWidth: 60, textAlign: 'center',
-              }}
-            />
-            <Text style={{ fontSize: 11, color: C.textMuted }}>bar</Text>
-            <TouchableOpacity onPress={save}
-              style={{ backgroundColor: C.accent, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: C.bg }}>OK</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setEditing(false); setInputVal(String(threshold)); }}>
-              <Text style={{ fontSize: 12, color: C.textMuted }}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity
-            onPress={() => { setInputVal(String(threshold)); setEditing(true); }}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 16, fontWeight: '900', color: C.warning }}>{threshold} bar</Text>
-            <Text style={{ fontSize: 10 }}>✏️</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Légende */}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
-        {[
-          { color: C.success, label: `≥ ${(threshold * 1.15).toFixed(1)} bar  OK` },
-          { color: C.warning, label: `${threshold}–${(threshold * 1.15).toFixed(1)}  Bas` },
-          { color: C.danger,  label: `< ${threshold}  Critique` },
-        ].map(({ color, label }) => (
-          <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-            <Text style={{ fontSize: 8, color: C.textMuted }}>{label}</Text>
-          </View>
-        ))}
-      </View>
-
-      {telemetry?.recorded_at && (
-        <Text style={{ fontSize: 9, color: C.textMuted, textAlign: 'right' }}>
-          {timeAgo(telemetry.recorded_at)}
-        </Text>
-      )}
-    </View>
-  );
-}
-
-// ── Dashboard screen ───────────────────────────────────────
-
-// ── MPU-6050 card ───────────────────────────────────────────
-
-function MpuCard({ telemetry, threshold, onChangeThreshold }) {
-  const x = telemetry?.accel_x;
-  const y = telemetry?.accel_y;
-  const z = telemetry?.accel_z;
-  const magnitude = (x != null && y != null && z != null)
-    ? Math.sqrt(x * x + y * y + z * z)
-    : null;
-  const isFall = magnitude != null && magnitude > threshold;
-  const borderColor = isFall ? C.danger + '44' : C.border;
-
-  const [editingThreshold, setEditingThreshold] = useState(false);
-  const [thresholdInput, setThresholdInput] = useState(String(threshold));
-
-  const saveThreshold = async () => {
-    const val = parseFloat(thresholdInput);
-    if (isNaN(val) || val <= 0) { alertOk('Erreur', 'Seuil invalide'); return; }
-    await onChangeThreshold(val);
-    setEditingThreshold(false);
-  };
-
-  return (
-    <View style={{
-      backgroundColor: C.bgCard, borderRadius: 18,
-      borderWidth: 1, borderColor, padding: 18, gap: 14,
-    }}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 20 }}>📐</Text>
-          <Text style={{ fontSize: 15, fontWeight: '800', color: C.white }}>MPU-6050</Text>
-        </View>
-        {isFall && (
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 5,
-            backgroundColor: C.dangerDim, borderRadius: 10,
-            paddingHorizontal: 10, paddingVertical: 4,
-            borderWidth: 1, borderColor: C.danger + '44',
-          }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.danger }} />
-            <Text style={{ fontSize: 9, fontWeight: '700', color: C.danger }}>CHUTE</Text>
-          </View>
-        )}
-        {!isFall && magnitude != null && (
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 5,
-            backgroundColor: C.successDim, borderRadius: 10,
-            paddingHorizontal: 10, paddingVertical: 4,
-            borderWidth: 1, borderColor: C.success + '44',
-          }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.success }} />
-            <Text style={{ fontSize: 9, fontWeight: '700', color: C.success }}>Stable</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Axes X Y Z */}
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {[
-          { label: 'X', value: x, color: '#FF6B6B' },
-          { label: 'Y', value: y, color: '#51CF66' },
-          { label: 'Z', value: z, color: '#339AF0' },
-        ].map(({ label, value, color }) => (
+          { label: 'Tension',  value: item.voltage,     unit: 'V'  },
+          { label: 'Courant',  value: item.current_a,   unit: 'A'  },
+          { label: 'Temp.',    value: item.temperature,  unit: '°C' },
+        ].map(({ label, value, unit }) => (
           <View key={label} style={{
-            flex: 1, backgroundColor: C.bgElevated, borderRadius: 14,
-            padding: 12, alignItems: 'center', gap: 4,
+            flex: 1, backgroundColor: C.bgElevated, borderRadius: 10,
+            padding: 10, alignItems: 'center', gap: 2,
             borderWidth: 1, borderColor: C.border,
           }}>
-            <Text style={{ fontSize: 10, fontWeight: '800', color, letterSpacing: 1 }}>{label}</Text>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: C.white }}>
+            <Text style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>{label}</Text>
+            <Text style={{ fontSize: 14, fontWeight: '900', color: C.white }}>
               {value != null ? value.toFixed(1) : '—'}
             </Text>
-            <Text style={{ fontSize: 8, color: C.textMuted }}>g</Text>
+            <Text style={{ fontSize: 8, color: C.textMuted }}>{unit}</Text>
           </View>
         ))}
       </View>
-
-      {/* Magnitude */}
-      {magnitude != null && (
-        <View style={{
-          flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-          backgroundColor: C.bgElevated, borderRadius: 12, padding: 12,
-          borderWidth: 1, borderColor: isFall ? C.danger + '33' : C.border,
-        }}>
-          <Text style={{ fontSize: 10, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
-            Magnitude
-          </Text>
-          <Text style={{ fontSize: 16, fontWeight: '900', color: isFall ? C.danger : C.white }}>
-            {magnitude.toFixed(2)} g
-          </Text>
-        </View>
-      )}
-
-      {/* Seuil */}
-      <View style={{
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        backgroundColor: C.bgElevated, borderRadius: 12, padding: 12,
-        borderWidth: 1, borderColor: C.border,
-      }}>
-        <Text style={{ fontSize: 10, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
-          Seuil chute
-        </Text>
-        {editingThreshold ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TextInput
-              value={thresholdInput}
-              onChangeText={setThresholdInput}
-              keyboardType="numeric"
-              style={{
-                backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
-                color: C.white, fontSize: 14, fontWeight: '800', width: 60, textAlign: 'center',
-                borderWidth: 1, borderColor: C.accent,
-              }}
-              autoFocus
-            />
-            <TouchableOpacity onPress={saveThreshold}
-              style={{ backgroundColor: C.accent, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: C.bg }}>OK</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setEditingThreshold(false); setThresholdInput(String(threshold)); }}>
-              <Text style={{ fontSize: 12, color: C.textMuted }}>X</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity onPress={() => { setThresholdInput(String(threshold)); setEditingThreshold(true); }}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 16, fontWeight: '900', color: C.warning }}>
-              {threshold} g
-            </Text>
-            <Text style={{ fontSize: 10 }}>✏️</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Derniere mise a jour */}
-      {telemetry?.recorded_at && (
-        <Text style={{ fontSize: 9, color: C.textMuted, textAlign: 'right' }}>
-          {timeAgo(telemetry.recorded_at)}
-        </Text>
-      )}
     </View>
   );
 }
@@ -606,13 +265,15 @@ function MpuCard({ telemetry, threshold, onChangeThreshold }) {
 export default function DashboardScreen({ route, navigation }) {
   const scooter = route.params?.scooter;
 
-  const [batteries,      setBatteries]      = useState([]);
-  const [battLoading,    setBattLoading]    = useState(true);
-  const [showForm,       setShowForm]       = useState(false);
-  const [editingBatt,    setEditingBatt]    = useState(null);
-  const [telemetry,      setTelemetry]      = useState(null);
-  const [fallThreshold,  setFallThreshold]  = useState(scooter?.fall_threshold ?? 2.5);
-  const [tpmsThreshold,  setTpmsThreshold]  = useState(scooter?.tpms_threshold ?? 2.0);
+  const [batteries,     setBatteries]     = useState([]);
+  const [battLoading,   setBattLoading]   = useState(true);
+  const [showBattForm,  setShowBattForm]  = useState(false);
+  const [editingBatt,   setEditingBatt]   = useState(null);
+  const [showTpmsForm,  setShowTpmsForm]  = useState(false);
+  const [tpmsWheel,     setTpmsWheel]     = useState('AV');
+  const [telemetry,     setTelemetry]     = useState(null);
+  const [fallThreshold, setFallThreshold] = useState(scooter?.fall_threshold ?? 2.5);
+  const [attention,     setAttention]     = useState({ visible: false, label: '', action: null });
 
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
@@ -633,74 +294,66 @@ export default function DashboardScreen({ route, navigation }) {
       .from('telemetry').select('*')
       .eq('scooter_id', scooter.id)
       .order('recorded_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1).maybeSingle();
     if (data) setTelemetry(data);
   };
 
-  const updateThreshold = async (val) => {
-    const { error } = await supabase
-      .from('scooters').update({ fall_threshold: val }).eq('id', scooter.id);
-    if (error) { alertOk('Erreur', error.message); return; }
-    setFallThreshold(val);
-  };
-
-  const updateTpmsThreshold = async (val) => {
-    const { error } = await supabase
-      .from('scooters').update({ tpms_threshold: val }).eq('id', scooter.id);
-    if (error) { alertOk('Erreur', error.message); return; }
-    setTpmsThreshold(val);
-  };
-
   const deleteBattery = (item) => {
-    alertConfirm('Supprimer', `Supprimer "${item.serial_number}" ?`, async () => {
-      const { error } = await supabase.from('batteries').delete().eq('id', item.id);
-      if (error) alertOk('Erreur', error.message);
-      else fetchBatteries();
+    setAttention({
+      visible: true,
+      label: `Supprimer la batterie "${item.serial_number}" ?`,
+      action: async () => {
+        const { error } = await supabase.from('batteries').delete().eq('id', item.id);
+        if (error) alertOk('Erreur', error.message);
+        else fetchBatteries();
+      },
     });
   };
+
+  const showAttention = (label, action) => setAttention({ visible: true, label, action });
 
   useEffect(() => {
     if (!scooter?.id) return;
     fetchBatteries();
     fetchTelemetry();
-
-    // Fetch thresholds from DB
     supabase.from('scooters').select('fall_threshold').eq('id', scooter.id).single()
-      .then(({ data }) => {
-        if (data?.fall_threshold != null) setFallThreshold(data.fall_threshold);
-      });
+      .then(({ data }) => { if (data?.fall_threshold != null) setFallThreshold(data.fall_threshold); });
 
     const battCh = supabase.channel('batt-' + scooter.id)
-      .on('postgres_changes', {
-        event: '*', schema: 'public',
-        table: 'batteries', filter: 'scooter_id=eq.' + scooter.id,
-      }, () => fetchBatteries())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, () => fetchBatteries())
       .subscribe();
-
     const telCh = supabase.channel('tel-' + scooter.id)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public',
-        table: 'telemetry', filter: 'scooter_id=eq.' + scooter.id,
-      }, () => fetchTelemetry())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry', filter: 'scooter_id=eq.' + scooter.id }, () => fetchTelemetry())
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(battCh);
-      supabase.removeChannel(telCh);
-    };
+    return () => { supabase.removeChannel(battCh); supabase.removeChannel(telCh); };
   }, [scooter?.id]);
 
   if (!scooter) return (
     <View style={{ flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }}>
       <TouchableOpacity onPress={() => navigation.goBack()}
-        style={{ backgroundColor: C.bgElevated, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
-        <Text style={{ color: C.accent, fontWeight: '700' }}>Retour</Text>
+        style={{ backgroundColor: C.bgCard, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: C.border }}>
+        <Text style={{ color: C.accentBright, fontWeight: '700' }}>← Retour</Text>
       </TouchableOpacity>
     </View>
   );
 
-  const sc = STATUS[scooter.status] ?? STATUS.offline;
+  const sc     = STATUS[telemetry?.status ?? scooter.status] ?? STATUS.offline;
+  const tamper = telemetry?.tamper_points ?? [false, false, false];
+  const front  = telemetry?.wheel_front;
+  const rear   = telemetry?.wheel_rear;
+  const lat    = telemetry?.latitude;
+  const accelX = telemetry?.accel_x;
+  const accelY = telemetry?.accel_y;
+  const accelZ = telemetry?.accel_z;
+  const isFallen = telemetry?.fallen ?? false;
+
+  const wheelCol = (v) => {
+    if (v == null) return C.textMuted;
+    if (v < 2.0)   return C.danger;
+    if (v < 2.3)   return C.warning;
+    return C.success;
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -709,113 +362,218 @@ export default function DashboardScreen({ route, navigation }) {
         contentContainerStyle={{ padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Retour */}
-        <TouchableOpacity onPress={() => navigation.goBack()}
-          style={{ alignSelf: 'flex-start', backgroundColor: C.bgElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border, marginBottom: 20 }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSecondary }}>← Retour</Text>
-        </TouchableOpacity>
+        {/* ── Header ────────────────────────────────────────── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, gap: 12 }}>
+          <TouchableOpacity onPress={() => navigation.goBack()}
+            style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: C.bgCard, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 20, color: C.white }}>‹</Text>
+          </TouchableOpacity>
 
-        {/* Status badge */}
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', gap: 6,
-          alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5,
-          borderRadius: 20, borderWidth: 1,
-          borderColor: sc.color + '44', backgroundColor: sc.bg,
-          marginBottom: 12,
-        }}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: sc.color }} />
-          <Text style={{ fontSize: 10, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>{sc.label}</Text>
-        </View>
-
-        {/* Hero : nom + scooter emoji */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 28, fontWeight: '900', color: C.white, letterSpacing: -1 }}>
-              {scooter.name ?? 'Scooter'}
+            <Text style={{ fontSize: 22, fontWeight: '900', color: C.white, letterSpacing: -0.5 }}>
+              {scooter.name}
             </Text>
-            {scooter.model ? <Text style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>{scooter.model}</Text> : null}
-            {scooter.reference ? <Text style={{ fontSize: 11, color: C.accent, marginTop: 2 }}>#{scooter.reference}</Text> : null}
+            {scooter.model ? <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{scooter.model}</Text> : null}
           </View>
-          <Text style={{ fontSize: 48 }}>🛵</Text>
+
+          {lat != null && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('GPS', { scooter, telemetry })}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.bgCard, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: C.border }}>
+              <Text style={{ fontSize: 14 }}>📍</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: C.accentBright }}>GPS</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: sc.color + '44', backgroundColor: sc.bg }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
+            <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color }}>{sc.label}</Text>
+          </View>
         </View>
 
-        {/* Header batteries */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
-            Batteries
-          </Text>
+        {/* ── Batteries ─────────────────────────────────────── */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <SectionHeader title="Batteries" />
           {batteries.length < MAX_BATTERIES && (
-            <TouchableOpacity
-              onPress={() => { setEditingBatt(null); setShowForm(true); }}
-              style={{
-                flexDirection: 'row', alignItems: 'center', gap: 4,
-                borderWidth: 1, borderColor: C.accent,
-                paddingHorizontal: 14, paddingVertical: 7, borderRadius: 12,
-              }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: C.accent }}>+ Ajouter</Text>
+            <TouchableOpacity onPress={() => { setEditingBatt(null); setShowBattForm(true); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: C.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, marginTop: 14 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: C.accentBright }}>+ Ajouter</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Liste batteries */}
         {battLoading ? (
           <ActivityIndicator color={C.accent} style={{ marginVertical: 24 }} />
         ) : batteries.length === 0 ? (
-          <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: C.border, borderStyle: 'dashed' }}>
-            <Text style={{ fontSize: 36, marginBottom: 10 }}>🔋</Text>
-            <Text style={{ fontSize: 13, color: C.textMuted, textAlign: 'center', lineHeight: 20 }}>
-              Aucune batterie enregistree.{'\n'}Appuyez sur + Ajouter.
-            </Text>
+          <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>🔋</Text>
+            <Text style={{ fontSize: 13, color: C.textMuted, textAlign: 'center' }}>Aucune batterie. Appuyez sur + Ajouter.</Text>
           </View>
         ) : (
           <View style={{ gap: 10 }}>
             {batteries.map(b => (
-              <BatteryCard
-                key={b.id}
-                item={b}
-                onEdit={(item) => { setEditingBatt(item); setShowForm(true); }}
+              <BatteryCard key={b.id} item={b}
+                onEdit={item => { setEditingBatt(item); setShowBattForm(true); }}
                 onDelete={deleteBattery}
               />
             ))}
           </View>
         )}
 
-        {/* Header MPU */}
-        <View style={{ marginTop: 28, marginBottom: 16 }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
-            Accelerometre
-          </Text>
+        {/* ── Points de sabotage ────────────────────────────── */}
+        <SectionHeader title="Points de sabotage" />
+        <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: tamper.some(Boolean) ? C.danger + '44' : C.border, flexDirection: 'row', gap: 10 }}>
+          {['Siège', 'Avant', 'Batterie'].map((label, i) => {
+            const active = tamper[i] ?? false;
+            return (
+              <View key={label} style={{
+                flex: 1, backgroundColor: active ? C.dangerDim : C.bgElevated,
+                borderRadius: 12, padding: 12, alignItems: 'center', gap: 6,
+                borderWidth: 1, borderColor: active ? C.danger + '44' : C.border,
+              }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: active ? C.danger : C.success }} />
+                <Text style={{ fontSize: 10, fontWeight: '700', color: active ? C.danger : C.white, textAlign: 'center' }}>{label}</Text>
+                <Text style={{ fontSize: 8, color: active ? C.danger : C.success }}>{active ? 'Alerte' : 'OK'}</Text>
+              </View>
+            );
+          })}
         </View>
 
-        <MpuCard
-          telemetry={telemetry}
-          threshold={fallThreshold}
-          onChangeThreshold={updateThreshold}
-        />
-
-        {/* Header TPMS */}
-        <View style={{ marginTop: 28, marginBottom: 16 }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
-            Pression des pneus
-          </Text>
+        {/* ── Contrôle R.C ──────────────────────────────────── */}
+        <SectionHeader title="Controle R.C" />
+        <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.border, gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {[
+              { label: 'Activer',    action: "Activer l'alarme",    color: C.success },
+              { label: 'Désactiver', action: "Désactiver l'alarme", color: C.danger  },
+            ].map(({ label, action, color }) => (
+              <TouchableOpacity key={label}
+                onPress={() => showAttention(action, () => alertOk('Info', `${action} envoyé`))}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: color + '22', borderWidth: 1, borderColor: color + '44' }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color }}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {[
+              { label: 'Env. Marche', action: 'Démarrer le scooter', color: C.accentBright },
+              { label: 'M. Arrêter',  action: 'Arrêter le scooter',  color: C.warning      },
+            ].map(({ label, action, color }) => (
+              <TouchableOpacity key={label}
+                onPress={() => showAttention(action, () => alertOk('Info', `${action} envoyé`))}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: color + '22', borderWidth: 1, borderColor: color + '44' }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color }}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
-        <TpmsCard
-          telemetry={telemetry}
-          threshold={tpmsThreshold}
-          onChangeThreshold={updateTpmsThreshold}
-        />
+        {/* ── Gyroscope ─────────────────────────────────────── */}
+        <SectionHeader title="Gyroscope" />
+        <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: isFallen ? C.danger + '44' : C.border, gap: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>MPU-6050</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
+              backgroundColor: isFallen ? C.dangerDim : C.successDim,
+              borderWidth: 1, borderColor: isFallen ? C.danger + '44' : C.success + '33' }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isFallen ? C.danger : C.success }} />
+              <Text style={{ fontSize: 9, fontWeight: '700', color: isFallen ? C.danger : C.success }}>
+                {isFallen ? 'CHUTE !' : 'Stable'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {[
+              { label: 'Droite', value: accelX, color: '#FF6B6B' },
+              { label: 'Gauche', value: accelY, color: '#51CF66' },
+              { label: 'Avant',  value: accelZ, color: '#339AF0' },
+            ].map(({ label, value, color }) => (
+              <View key={label} style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 12, padding: 12, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: C.border }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color, letterSpacing: 1 }}>{label}</Text>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: C.white }}>
+                  {value != null ? value.toFixed(1) : '—'}
+                </Text>
+                <Text style={{ fontSize: 8, color: C.textMuted }}>g</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.bgElevated, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>Seuil chute</Text>
+            <Text style={{ fontSize: 15, fontWeight: '900', color: C.warning }}>{fallThreshold} g</Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Parametres', { tab: 'gyroscope', scooter })}
+            style={{ backgroundColor: C.bgElevated, borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.accentBright }}>⚙️ Configurer les seuils</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── TPMS ──────────────────────────────────────────── */}
+        <SectionHeader title="TPMS" />
+        <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.border, gap: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {[
+              { label: 'AV.', value: front, color: wheelCol(front) },
+              { label: 'AR.', value: rear,  color: wheelCol(rear)  },
+            ].map(({ label, value, color }) => (
+              <View key={label} style={{ flex: 1, backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: color + '44' }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Text>
+                <Text style={{ fontSize: 26, fontWeight: '900', color, letterSpacing: -1 }}>
+                  {value != null ? value.toFixed(1) : '—'}
+                </Text>
+                <Text style={{ fontSize: 9, color: C.textMuted }}>Bar</Text>
+                <Text style={{ fontSize: 9, fontWeight: '700', color }}>
+                  {value == null ? '—' : value < 2.0 ? 'Critique' : value < 2.3 ? 'Bas' : 'OK'}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {['AV', 'AR'].map(w => (
+              <TouchableOpacity key={w}
+                onPress={() => { setTpmsWheel(w); setShowTpmsForm(true); }}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: C.accentBright }}>+ TPMS {w}.</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {telemetry?.recorded_at && (
+          <Text style={{ fontSize: 9, color: C.textMuted, textAlign: 'center', marginTop: 20 }}>
+            Dernière mise à jour : {timeAgo(telemetry.recorded_at)}
+          </Text>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
 
       <BatteryFormModal
-        visible={showForm}
-        onClose={() => setShowForm(false)}
+        visible={showBattForm}
+        onClose={() => setShowBattForm(false)}
         onSaved={fetchBatteries}
         scooterId={scooter?.id}
         initial={editingBatt}
         usedSlots={usedSlots}
+      />
+
+      <TpmsFormModal
+        visible={showTpmsForm}
+        onClose={() => setShowTpmsForm(false)}
+        onSaved={() => {}}
+        scooterId={scooter?.id}
+        wheel={tpmsWheel}
+      />
+
+      <AttentionModal
+        visible={attention.visible}
+        label={attention.label}
+        onOui={() => { attention.action?.(); setAttention({ visible: false, label: '', action: null }); }}
+        onNon={() => setAttention({ visible: false, label: '', action: null })}
       />
     </View>
   );
