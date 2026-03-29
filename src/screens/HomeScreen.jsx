@@ -5,7 +5,7 @@ import {
   Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
-import { C, STATUS, battColor, timeAgo, alertOk, alertConfirm } from '../constants';
+import { C, STATUS, battColor, timeAgo, alertOk } from '../constants';
 import Sidebar from '../components/Sidebar';
 
 // ── Helpers ──────────────────────────────────────────────
@@ -17,6 +17,45 @@ function wheelColor(v, threshold = 2.0) {
   return C.success;
 }
 
+// ── Indicator cell (cellule colorée) ─────────────────────
+
+function IndicCell({ children, alertColor }) {
+  const bg = alertColor === C.danger
+    ? '#3A0A14'
+    : alertColor === C.success
+      ? '#0A2A14'
+      : alertColor === C.warning
+        ? '#2A2A0A'
+        : C.bgElevated;
+  const borderCol = alertColor ? alertColor + '55' : C.border;
+
+  return (
+    <View style={{
+      flex: 1, backgroundColor: bg, borderRadius: 10,
+      paddingVertical: 8, paddingHorizontal: 4,
+      alignItems: 'center', gap: 4,
+      borderWidth: 1.5,
+      borderColor: borderCol,
+    }}>
+      {children}
+    </View>
+  );
+}
+
+function Dot({ color }) {
+  return <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color }} />;
+}
+
+function CellLabel({ text }) {
+  return (
+    <Text style={{ fontSize: 7, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+      {text}
+    </Text>
+  );
+}
+
+// ── Battery dashes ───────────────────────────────────────
+
 function BatteryDashes({ batteries }) {
   const slots = [null, null, null];
   (batteries ?? []).forEach(b => {
@@ -27,94 +66,110 @@ function BatteryDashes({ batteries }) {
     <View style={{ flexDirection: 'row', gap: 3, alignItems: 'center' }}>
       {slots.map((b, i) => (
         <View key={i} style={{
-          width: 18, height: 6, borderRadius: 2,
+          width: 14, height: 22, borderRadius: 3,
           backgroundColor: b ? battColor(b.soc) : C.textMuted + '33',
+          borderWidth: 1,
+          borderColor: b ? battColor(b.soc) + '88' : C.textMuted + '22',
         }} />
       ))}
     </View>
   );
 }
 
-// ── Scooter card ─────────────────────────────────────────
+// ── Scooter card (5 cellules comme Figma) ────────────────
 
 function ScooterCard({ item, onPress }) {
   const sc        = STATUS[item.status] ?? STATUS.offline;
   const tamper    = item.tamper_points ?? [false, false, false];
   const anyTamper = tamper.some(Boolean);
   const batteries = item._batteries ?? [];
+  const tpmsThresh = item.tpms_threshold ?? 2.0;
 
   return (
     <TouchableOpacity
       onPress={() => onPress(item)}
       activeOpacity={0.75}
       style={{
-        backgroundColor: C.bgCard,
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
+        backgroundColor: C.bgCard, borderRadius: 16,
+        padding: 14, borderWidth: 1,
         borderColor: anyTamper || item.fallen ? C.danger + '55' : C.border,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
       }}
     >
-      {/* Icone scooter */}
-      <View style={{
-        width: 48, height: 48, borderRadius: 12,
-        backgroundColor: C.bgElevated,
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1, borderColor: C.border,
-      }}>
-        <Text style={{ fontSize: 24 }}>🛵</Text>
-      </View>
-
-      {/* Infos */}
-      <View style={{ flex: 1, gap: 4 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 16, fontWeight: '800', color: C.white }}>{item.name}</Text>
-          {/* Badge status */}
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 5,
-            paddingHorizontal: 10, paddingVertical: 4,
-            borderRadius: 20, borderWidth: 1,
-            borderColor: sc.color + '44', backgroundColor: sc.bg,
-          }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
-            <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>
-              {sc.label}
-            </Text>
-          </View>
-        </View>
-
-        {item.model ? (
-          <Text style={{ fontSize: 11, color: C.textMuted }}>{item.model}</Text>
-        ) : null}
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
-          <BatteryDashes batteries={batteries} />
-          {anyTamper && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: C.danger }} />
-              <Text style={{ fontSize: 9, color: C.danger, fontWeight: '700' }}>Alerte sabotage</Text>
-            </View>
-          )}
-          {item.fallen && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: C.danger }} />
-              <Text style={{ fontSize: 9, color: C.danger, fontWeight: '700' }}>Chute</Text>
-            </View>
-          )}
-        </View>
-
-        {item.last_update ? (
-          <Text style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>
-            Mis à jour {timeAgo(item.last_update)}
+      {/* Header : nom + badge status */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <Text style={{ fontSize: 15, fontWeight: '800', color: C.white }}>{item.name}</Text>
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 5,
+          paddingHorizontal: 10, paddingVertical: 4,
+          borderRadius: 20, borderWidth: 1,
+          borderColor: sc.color + '44', backgroundColor: sc.bg,
+        }}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
+          <Text style={{ fontSize: 9, fontWeight: '700', color: sc.color, letterSpacing: 0.5 }}>
+            {sc.label}
           </Text>
-        ) : null}
+        </View>
       </View>
 
-      {/* Flèche */}
-      <Text style={{ fontSize: 16, color: C.textMuted }}>›</Text>
+      {/* 5 cellules indicateurs */}
+      <View style={{ flexDirection: 'row', gap: 5 }}>
+        {/* BATT */}
+        <IndicCell>
+          <Text style={{ fontSize: 14 }}>🔋</Text>
+          <BatteryDashes batteries={batteries} />
+          <CellLabel text="Batt." />
+        </IndicCell>
+
+        {/* SABOTAGE */}
+        <IndicCell alertColor={anyTamper ? C.danger : C.success}>
+          <Text style={{ fontSize: 14 }}>🔒</Text>
+          <View style={{ flexDirection: 'row', gap: 3 }}>
+            {tamper.slice(0, 3).map((active, i) => (
+              <Dot key={i} color={active ? C.danger : C.success} />
+            ))}
+          </View>
+          <CellLabel text="Sabotage" />
+        </IndicCell>
+
+        {/* ALARME */}
+        <IndicCell alertColor={item.alarm ? C.success : C.danger}>
+          <Text style={{ fontSize: 14 }}>🔐</Text>
+          <Dot color={item.alarm ? C.success : C.danger} />
+          <CellLabel text="Alarme" />
+        </IndicCell>
+
+        {/* CHUTE */}
+        <IndicCell alertColor={item.fallen ? C.danger : C.success}>
+          <Text style={{
+            fontSize: 14,
+            transform: [{ rotate: item.fallen ? '90deg' : '0deg' }],
+          }}>🛵</Text>
+          <Dot color={item.fallen ? C.danger : C.success} />
+          <CellLabel text="Chute" />
+        </IndicCell>
+
+        {/* ROUES */}
+        <IndicCell alertColor={
+          wheelColor(item.wheel_front, tpmsThresh) === C.danger || wheelColor(item.wheel_rear, tpmsThresh) === C.danger
+            ? C.danger
+            : wheelColor(item.wheel_front, tpmsThresh) === C.warning || wheelColor(item.wheel_rear, tpmsThresh) === C.warning
+              ? C.warning
+              : (item.wheel_front != null || item.wheel_rear != null) ? C.success : null
+        }>
+          <Text style={{ fontSize: 14 }}>⚙️</Text>
+          <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+            <View style={{ alignItems: 'center', gap: 1 }}>
+              <Dot color={wheelColor(item.wheel_front, tpmsThresh)} />
+              <Text style={{ fontSize: 7, color: C.textMuted }}>AV</Text>
+            </View>
+            <View style={{ alignItems: 'center', gap: 1 }}>
+              <Dot color={wheelColor(item.wheel_rear, tpmsThresh)} />
+              <Text style={{ fontSize: 7, color: C.textMuted }}>AR</Text>
+            </View>
+          </View>
+          <CellLabel text="Roues" />
+        </IndicCell>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -167,67 +222,50 @@ function AddScooterModal({ visible, onClose, onSaved, initial }) {
           padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
         }}>
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'center', marginBottom: 20 }} />
-
           <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 20, textAlign: 'center' }}>
             {isEdit ? 'Modifier Scooter' : 'Scooter X'}
           </Text>
 
-          {/* N° Serie/Cadre */}
           <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
             N° Serie/ Cadre
           </Text>
-          <View style={{ position: 'relative', marginBottom: 6 }}>
-            <TextInput
-              value={name}
-              onChangeText={t => setName(t.slice(0, 17))}
-              placeholder="Scooter X"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              maxLength={17}
-              style={{
-                backgroundColor: 'rgba(255,255,255,0.15)',
-                borderRadius: 12, padding: 14,
-                color: C.white, fontSize: 15,
-                borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
-              }}
-            />
-          </View>
-          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginBottom: 12, textAlign: 'right' }}>
-            {name.length}/17 caractères
-          </Text>
-
-          {/* Modele */}
-          <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-            Modèle
-          </Text>
           <TextInput
-            value={model}
-            onChangeText={setModel}
-            placeholder="ex: Niu NQi GT Pro"
+            value={name}
+            onChangeText={t => setName(t.slice(0, 17))}
+            placeholder="Scooter X"
             placeholderTextColor="rgba(255,255,255,0.4)"
+            maxLength={17}
             style={{
               backgroundColor: 'rgba(255,255,255,0.15)',
               borderRadius: 12, padding: 14,
               color: C.white, fontSize: 15,
               borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
-              marginBottom: 16,
+            }}
+          />
+          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginBottom: 12, marginTop: 4, textAlign: 'right' }}>
+            {name.length}/17 caractères
+          </Text>
+
+          <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+            Modèle
+          </Text>
+          <TextInput
+            value={model} onChangeText={setModel}
+            placeholder="ex: Niu NQi GT Pro" placeholderTextColor="rgba(255,255,255,0.4)"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 15,
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+              marginBottom: 20,
             }}
           />
 
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={loading}
-            activeOpacity={0.8}
-            style={{
-              backgroundColor: C.white,
-              borderRadius: 14, padding: 16,
-              alignItems: 'center',
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
+          <TouchableOpacity onPress={handleSave} disabled={loading} activeOpacity={0.8}
+            style={{ backgroundColor: C.white, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
             {loading
               ? <ActivityIndicator color={C.accent} />
-              : <Text style={{ fontSize: 16, fontWeight: '900', color: C.accent }}>Valider</Text>
-            }
+              : <Text style={{ fontSize: 16, fontWeight: '900', color: C.accent }}>Valider</Text>}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -252,15 +290,12 @@ function LogoutModal({ visible, onClose, onConfirm, loading }) {
           <Text style={{ fontSize: 13, color: C.textSecondary, textAlign: 'center', marginBottom: 28, lineHeight: 20 }}>
             Vous allez être déconnecté de votre compte.
           </Text>
-
           <TouchableOpacity onPress={onConfirm} disabled={loading} activeOpacity={0.85}
             style={{ backgroundColor: C.dangerDim, borderRadius: 14, padding: 14, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: C.danger + '55' }}>
             {loading
               ? <ActivityIndicator color={C.danger} />
-              : <Text style={{ fontSize: 14, fontWeight: '800', color: C.danger }}>Confirmer</Text>
-            }
+              : <Text style={{ fontSize: 14, fontWeight: '800', color: C.danger }}>Confirmer</Text>}
           </TouchableOpacity>
-
           <TouchableOpacity onPress={onClose} activeOpacity={0.8}
             style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
             <Text style={{ fontSize: 14, fontWeight: '700', color: C.textSecondary }}>Annuler</Text>
@@ -282,12 +317,12 @@ export default function HomeScreen({ navigation }) {
   const [logoutLoading,  setLogoutLoading]  = useState(false);
   const [userEmail,      setUserEmail]      = useState('');
   const [showSidebar,    setShowSidebar]    = useState(false);
+  const [searchText,     setSearchText]     = useState('');
 
   const fetchScooters = async () => {
     const { data: scooterData, error } = await supabase
       .from('scooters')
       .select('*, batteries(id, serial_number, slot, soc)');
-
     if (error) { console.error('Supabase:', error); setLoading(false); return; }
 
     const ids = (scooterData ?? []).map(s => s.id);
@@ -319,8 +354,6 @@ export default function HomeScreen({ navigation }) {
           wheel_rear: t.wheel_rear,
           status: t.status ?? s.status ?? 'offline',
           last_update: t.recorded_at,
-          latitude: t.latitude,
-          longitude: t.longitude,
         } : { status: s.status ?? 'offline' }),
         _batteries: s.batteries ?? [],
       };
@@ -330,9 +363,7 @@ export default function HomeScreen({ navigation }) {
 
   useEffect(() => {
     fetchScooters();
-    supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data?.user?.email ?? '');
-    });
+    supabase.auth.getUser().then(({ data }) => setUserEmail(data?.user?.email ?? ''));
 
     const ch1 = supabase.channel('home-tel')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' }, () => fetchScooters())
@@ -344,11 +375,7 @@ export default function HomeScreen({ navigation }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scooters' }, () => fetchScooters())
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(ch1);
-      supabase.removeChannel(ch2);
-      supabase.removeChannel(ch3);
-    };
+    return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); supabase.removeChannel(ch3); };
   }, []);
 
   const handleLogout = async () => {
@@ -359,15 +386,17 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleSidebarSelect = (key) => {
-    if (key === 'addScooter') { setEditingScooter(null); setShowForm(true); }
-    else if (key === 'parametres')  navigation.navigate('Parametres');
-    else if (key === 'compte')      setShowLogout(true);
-    else if (key === 'addBatterie') navigation.navigate('Dashboard', { scooter: scooters[0], openBatterie: true });
-    else if (key === 'addTpms')     navigation.navigate('Dashboard', { scooter: scooters[0], openTpms: true });
+    if (key === 'addScooter')      { setEditingScooter(null); setShowForm(true); }
+    else if (key === 'parametres') navigation.navigate('Parametres');
+    else if (key === 'compte')     setShowLogout(true);
+    else if (key === 'addBatterie' && scooters.length > 0) navigation.navigate('Dashboard', { scooter: scooters[0], openBatterie: true });
+    else if (key === 'addTpms'     && scooters.length > 0) navigation.navigate('Dashboard', { scooter: scooters[0], openTpms: true });
   };
 
-  const online   = scooters.filter(s => s.status !== 'offline').length;
-  const charging = scooters.filter(s => s.status === 'charging').length;
+  // Filtrage par recherche
+  const filtered = searchText.trim()
+    ? scooters.filter(s => s.name?.toLowerCase().includes(searchText.toLowerCase()))
+    : scooters;
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -380,108 +409,62 @@ export default function HomeScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={scooters}
+          data={filtered}
           keyExtractor={i => String(i.id)}
-          contentContainerStyle={{ padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }}
+          contentContainerStyle={{ paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
 
           ListHeaderComponent={() => (
-            <>
-              {/* Header */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 10, letterSpacing: 3, color: C.accentBright, textTransform: 'uppercase', marginBottom: 6 }}>
-                    Tableau de bord
-                  </Text>
-                  <Text style={{ fontSize: 32, fontWeight: '900', color: C.white, letterSpacing: -1 }}>
+            <View style={{ paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}>
+              {/* ── Top bar : ☰ EVE Mobility 🔔 ── */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <TouchableOpacity onPress={() => setShowSidebar(true)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 22, color: C.white }}>☰</Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: C.white }}>
                     EVE <Text style={{ color: C.accentBright }}>Mobility</Text>
                   </Text>
-                  <Text style={{ fontSize: 12, color: C.textSecondary, marginTop: 6 }}>
-                    {scooters.length} scooter{scooters.length > 1 ? 's' : ''}
-                  </Text>
-                  {userEmail ? (
-                    <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{userEmail}</Text>
-                  ) : null}
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                  {/* Hamburger */}
-                  <TouchableOpacity
-                    onPress={() => setShowSidebar(true)}
-                    activeOpacity={0.8}
-                    style={{
-                      width: 48, height: 48, borderRadius: 14,
-                      backgroundColor: C.bgCard,
-                      borderWidth: 1, borderColor: C.border,
-                      justifyContent: 'center', alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 20, color: C.white }}>☰</Text>
-                  </TouchableOpacity>
-
-                  {/* Ajouter */}
-                  <TouchableOpacity
-                    onPress={() => { setEditingScooter(null); setShowForm(true); }}
-                    activeOpacity={0.8}
-                    style={{
-                      width: 48, height: 48, borderRadius: 14,
-                      backgroundColor: C.accent,
-                      justifyContent: 'center', alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 26, color: C.white, fontWeight: '300', lineHeight: 30 }}>+</Text>
-                  </TouchableOpacity>
-
-                  {/* Déconnexion */}
-                  <TouchableOpacity
-                    onPress={() => setShowLogout(true)}
-                    activeOpacity={0.8}
-                    style={{
-                      width: 48, height: 48, borderRadius: 14,
-                      backgroundColor: C.dangerDim,
-                      borderWidth: 1, borderColor: C.danger + '44',
-                      justifyContent: 'center', alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 18 }}>🚪</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}
+                  style={{ width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 20 }}>🔔</Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Stats en ligne / en charge */}
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
-                {[
-                  { value: online,   color: C.success, label: 'En ligne'  },
-                  { value: charging, color: C.warning, label: 'En charge' },
-                ].map(({ value, color, label }) => (
-                  <View key={label} style={{
-                    flex: 1, backgroundColor: C.bgCard, borderRadius: 14,
-                    padding: 14, alignItems: 'center',
-                    borderWidth: 1, borderColor: C.border,
-                  }}>
-                    <Text style={{ fontSize: 24, fontWeight: '900', color, letterSpacing: -1 }}>{value}</Text>
-                    <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginTop: 4 }}>
-                      {label}
-                    </Text>
-                  </View>
-                ))}
+              {/* ── Barre de recherche ── */}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center',
+                backgroundColor: C.bgCard, borderRadius: 12,
+                borderWidth: 1, borderColor: C.border,
+                paddingHorizontal: 14, height: 44,
+                marginBottom: 18,
+                gap: 10,
+              }}>
+                <TouchableOpacity onPress={() => setShowSidebar(true)}>
+                  <Text style={{ fontSize: 16, color: C.textMuted }}>☰</Text>
+                </TouchableOpacity>
+                <TextInput
+                  value={searchText}
+                  onChangeText={setSearchText}
+                  placeholder="Hinted search text"
+                  placeholderTextColor={C.textMuted}
+                  style={{ flex: 1, color: C.white, fontSize: 14 }}
+                />
+                <Text style={{ fontSize: 16, color: C.textMuted }}>🔍</Text>
               </View>
-
-              <Text style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 14 }}>
-                Appareils
-              </Text>
-            </>
+            </View>
           )}
 
           renderItem={({ item }) => (
-            <ScooterCard
-              item={item}
-              onPress={scooter => navigation.navigate('Dashboard', { scooter })}
-            />
+            <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
+              <ScooterCard
+                item={item}
+                onPress={scooter => navigation.navigate('Dashboard', { scooter })}
+              />
+            </View>
           )}
-
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          ListFooterComponent={() => <View style={{ height: 40 }} />}
 
           ListEmptyComponent={() => (
             <View style={{ alignItems: 'center', paddingVertical: 60 }}>
