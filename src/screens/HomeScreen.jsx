@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
+  View, Text, FlatList, TouchableOpacity,Image,
   StatusBar, Platform, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
@@ -115,14 +115,22 @@ function ScooterCard({ item, onPress }) {
       <View style={{ flexDirection: 'row', gap: 5 }}>
         {/* BATT */}
         <IndicCell>
-          <Text style={{ fontSize: 14 }}>🔋</Text>
+          <Image
+            source={require('../../assets/battr.png')}
+            style={{ width: 30, height: 30, tintColor: '#000000' }}
+            resizeMode="contain"
+          />
           <BatteryDashes batteries={batteries} />
           <CellLabel text="Batt." />
         </IndicCell>
 
         {/* SABOTAGE */}
         <IndicCell alertColor={anyTamper ? C.danger : C.success}>
-          <Text style={{ fontSize: 14 }}>🔒</Text>
+          <Image
+            source={require('../../assets/sabotage.png')}
+            style={{ width: 30, height: 30, tintColor: '#000000' }}
+            resizeMode="contain"
+          />
           <View style={{ flexDirection: 'row', gap: 3 }}>
             {tamper.slice(0, 3).map((active, i) => (
               <Dot key={i} color={active ? C.danger : C.success} />
@@ -133,17 +141,22 @@ function ScooterCard({ item, onPress }) {
 
         {/* ALARME */}
         <IndicCell alertColor={item.alarm ? C.success : C.danger}>
-          <Text style={{ fontSize: 14 }}>🔐</Text>
+          <Image
+            source={require('../../assets/alarme.png')}
+            style={{ width: 30, height: 30, tintColor: '#000000' }}
+            resizeMode="contain"
+          />
           <Dot color={item.alarm ? C.success : C.danger} />
           <CellLabel text="Alarme" />
         </IndicCell>
 
         {/* CHUTE */}
         <IndicCell alertColor={item.fallen ? C.danger : C.success}>
-          <Text style={{
-            fontSize: 14,
-            transform: [{ rotate: item.fallen ? '90deg' : '0deg' }],
-          }}>🛵</Text>
+          <Image
+            source={require('../../assets/gyro.png')}
+            style={{ width: 30, height: 30, tintColor: '#000000' }}
+            resizeMode="contain"
+          />
           <Dot color={item.fallen ? C.danger : C.success} />
           <CellLabel text="Chute" />
         </IndicCell>
@@ -156,7 +169,11 @@ function ScooterCard({ item, onPress }) {
               ? C.warning
               : (item.wheel_front != null || item.wheel_rear != null) ? C.success : null
         }>
-          <Text style={{ fontSize: 14 }}>⚙️</Text>
+          <Image
+            source={require('../../assets/tpms.png')}
+            style={{ width: 30, height: 30, tintColor: '#000000' }}
+            resizeMode="contain"
+          />
           <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
             <View style={{ alignItems: 'center', gap: 1 }}>
               <Dot color={wheelColor(item.wheel_front, tpmsThresh)} />

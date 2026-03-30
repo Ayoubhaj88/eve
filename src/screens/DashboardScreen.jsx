@@ -396,20 +396,21 @@ export default function DashboardScreen({ route, navigation }) {
         <SectionTitle title="Controle R.C" />
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {[
-            { label: 'Activer',    action: "Activer l'alarme"   },
-            { label: 'Désactiver', action: "Désactiver l'alarme" },
-            { label: 'Env.\nMarche M.', action: 'Démarrer le scooter' },
-            { label: 'Arrêter M.', action: 'Arrêter le scooter' },
+            { label: 'Activer',       action: "Activer l'alarme"    },
+            { label: 'Désactiver',    action: "Désactiver l'alarme" },
+            { label: 'Env.',          action: 'Envoyer commande'    },
+            { label: 'Marche M.',     action: 'Démarrer le scooter' },
+            { label: 'Arrêter M.',    action: 'Arrêter le scooter'  },
           ].map(({ label, action }) => (
             <TouchableOpacity key={label}
               onPress={() => showAtt(action, () => alertOk('Info', `${action} envoyé`))}
               style={{
                 flex: 1, backgroundColor: C.bgElevated, borderRadius: 12,
-                padding: 10, alignItems: 'center', gap: 6,
+                paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', gap: 5,
                 borderWidth: 1, borderColor: C.border,
               }}>
-              <Text style={{ fontSize: 18 }}>🔔</Text>
-              <Text style={{ fontSize: 9, fontWeight: '700', color: C.white, textAlign: 'center' }}>
+              <Text style={{ fontSize: 16 }}>🔔</Text>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: C.white, textAlign: 'center' }} numberOfLines={2}>
                 {label}
               </Text>
             </TouchableOpacity>
