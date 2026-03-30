@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { C, STATUS, battColor, timeAgo, alertOk } from '../constants';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StatusBar, Platform, Modal, TextInput,
+  StatusBar, Platform, Modal,
   KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
 import AttentionModal from '../components/AttentionModal';
@@ -23,36 +23,36 @@ function SectionTitle({ title }) {
   );
 }
 
-// ── Battery form modal ──────────────────────────────────────
+// ── Modal assigner batterie depuis stock ────────────────────
 
-function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial, usedSlots }) {
-  const isEdit = !!initial;
-  const [serial,  setSerial]  = useState('');
-  const [bmsId,   setBmsId]   = useState('');
-  const [slot,    setSlot]    = useState(1);
-  const [loading, setLoading] = useState(false);
+function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots }) {
+  const [stockBatteries, setStockBatteries] = useState([]);
+  const [selectedId,     setSelectedId]     = useState(null);
+  const [slot,           setSlot]           = useState(1);
+  const [loading,        setLoading]        = useState(false);
+  const [fetching,       setFetching]       = useState(true);
+
+  const slotLabel = (s) => s === 3 ? 'Réserve' : `Batterie ${s}`;
 
   useEffect(() => {
-    if (initial) {
-      setSerial(initial.serial_number ?? '');
-      setBmsId(initial.bms_id ?? '');
-      setSlot(initial.slot ?? 1);
-    } else {
-      setSerial(''); setBmsId('');
-      setSlot([1, 2, 3].find(s => !usedSlots.includes(s)) ?? 1);
-    }
-  }, [initial, visible]);
+    if (!visible) return;
+    setSelectedId(null);
+    setSlot([1, 2, 3].find(s => !usedSlots.includes(s)) ?? 1);
+    // Charger batteries en stock (scooter_id IS NULL)
+    setFetching(true);
+    supabase.from('batteries').select('*')
+      .is('scooter_id', null)
+      .order('serial_number')
+      .then(({ data }) => { setStockBatteries(data ?? []); setFetching(false); });
+  }, [visible]);
 
-  const slotLabel = (s) => s === 3 ? 'Batterie reserve' : `Batterie ${s}`;
-
-  const save = async () => {
-    if (!serial.trim()) { alertOk('Erreur', 'N° Série obligatoire.'); return; }
+  const assign = async () => {
+    if (!selectedId) { alertOk('Erreur', 'Sélectionnez une batterie.'); return; }
     setLoading(true);
     try {
-      const row = { serial_number: serial.trim(), bms_id: bmsId.trim(), slot };
-      const { error } = isEdit
-        ? await supabase.from('batteries').update(row).eq('id', initial.id)
-        : await supabase.from('batteries').insert({ ...row, scooter_id: scooterId });
+      const { error } = await supabase.from('batteries')
+        .update({ scooter_id: scooterId, slot })
+        .eq('id', selectedId);
       if (error) throw error;
       onSaved(); onClose();
     } catch (e) { alertOk('Erreur', e.message); }
@@ -64,57 +64,89 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial, usedS
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
         <View style={{
-          backgroundColor: C.accent,
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+          backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24,
+          maxHeight: '75%',
         }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'center', marginBottom: 20 }} />
-          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 20, textAlign: 'center' }}>
-            {isEdit ? 'Modifier' : slotLabel(slot)}
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 20 }} />
+          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 16, textAlign: 'center' }}>
+            Assigner une batterie
           </Text>
 
-          {!isEdit && (
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-              {[1, 2, 3].map(s => {
-                const taken  = usedSlots.includes(s);
-                const active = slot === s;
+          {/* Sélection slot */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+            {[1, 2, 3].map(s => {
+              const taken  = usedSlots.includes(s);
+              const active = slot === s;
+              return (
+                <TouchableOpacity key={s} disabled={taken} onPress={() => setSlot(s)}
+                  style={{
+                    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+                    backgroundColor: active ? C.accent : C.bgElevated,
+                    borderWidth: 1, borderColor: active ? C.accent : C.border,
+                    opacity: taken ? 0.35 : 1,
+                  }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: active ? C.white : C.textSecondary }}>
+                    {slotLabel(s)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Liste batteries en stock */}
+          <Text style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+            Batteries en stock ({stockBatteries.length})
+          </Text>
+
+          {fetching ? (
+            <ActivityIndicator color={C.accent} style={{ marginVertical: 20 }} />
+          ) : stockBatteries.length === 0 ? (
+            <View style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 24, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: C.border }}>
+              <Text style={{ fontSize: 28, marginBottom: 8 }}>🔋</Text>
+              <Text style={{ fontSize: 13, color: C.textMuted, textAlign: 'center' }}>
+                Aucune batterie en stock.{'\n'}Ajoutez-en via le menu ☰ → Ajouter Batterie
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 220, marginBottom: 16 }}>
+              {stockBatteries.map(b => {
+                const selected = selectedId === b.id;
                 return (
-                  <TouchableOpacity key={s} disabled={taken} onPress={() => setSlot(s)}
+                  <TouchableOpacity key={b.id} onPress={() => setSelectedId(b.id)}
                     style={{
-                      flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
-                      backgroundColor: active ? C.white : 'rgba(255,255,255,0.15)',
-                      opacity: taken ? 0.35 : 1,
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      backgroundColor: selected ? C.accent + '22' : C.bgElevated,
+                      borderRadius: 12, padding: 12, marginBottom: 6,
+                      borderWidth: 2,
+                      borderColor: selected ? C.accent : C.border,
                     }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: active ? C.accent : C.white }}>
-                      {slotLabel(s)}
-                    </Text>
+                    <Text style={{ fontSize: 22 }}>🔋</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>{b.serial_number}</Text>
+                      {b.soc != null && (
+                        <Text style={{ fontSize: 10, color: C.textMuted }}>
+                          SOC: {b.soc}%
+                        </Text>
+                      )}
+                    </View>
+                    {selected && (
+                      <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: C.white, fontSize: 14, fontWeight: '800' }}>✓</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           )}
 
-          <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-            N° Serie
-          </Text>
-          <TextInput value={serial} onChangeText={setSerial}
-            placeholder="ex: RAF3G5" placeholderTextColor="rgba(255,255,255,0.4)"
-            autoCapitalize="characters"
-            style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 14 }}
-          />
-
-          <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-            N° BMS
-          </Text>
-          <TextInput value={bmsId} onChangeText={setBmsId}
-            placeholder="xx:xx:xx:xx:xx:xx" placeholderTextColor="rgba(255,255,255,0.4)"
-            autoCapitalize="none"
-            style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 20, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}
-          />
-
-          <TouchableOpacity onPress={save} disabled={loading} activeOpacity={0.8}
-            style={{ backgroundColor: C.white, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
-            {loading ? <ActivityIndicator color={C.accent} /> : <Text style={{ fontSize: 16, fontWeight: '900', color: C.accent }}>Valider</Text>}
+          {/* Bouton assigner */}
+          <TouchableOpacity onPress={assign} disabled={loading || !selectedId} activeOpacity={0.8}
+            style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', opacity: (loading || !selectedId) ? 0.5 : 1 }}>
+            {loading
+              ? <ActivityIndicator color={C.white} />
+              : <Text style={{ fontSize: 16, fontWeight: '900', color: C.white }}>Assigner au {slotLabel(slot)}</Text>}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -122,20 +154,42 @@ function BatteryFormModal({ visible, onClose, onSaved, scooterId, initial, usedS
   );
 }
 
-// ── TPMS form modal ─────────────────────────────────────────
+// ── Modal assigner TPMS depuis stock ────────────────────────
 
-function TpmsFormModal({ visible, onClose, onSaved, scooterId, wheel }) {
-  const [tpmsId,  setTpmsId]  = useState('');
-  const [loading, setLoading] = useState(false);
-  useEffect(() => { if (visible) setTpmsId(''); }, [visible]);
+function TpmsPickerModal({ visible, onClose, onSaved, scooterId, wheel }) {
+  const [stockSensors, setStockSensors] = useState([]);
+  const [selectedId,   setSelectedId]   = useState(null);
+  const [loading,      setLoading]      = useState(false);
+  const [fetching,     setFetching]     = useState(true);
 
-  const save = async () => {
-    if (!tpmsId.trim()) { alertOk('Erreur', 'ID TPMS obligatoire.'); return; }
+  useEffect(() => {
+    if (!visible) return;
+    setSelectedId(null);
+    setFetching(true);
+    supabase.from('tpms_sensors').select('*')
+      .is('scooter_id', null)
+      .eq('wheel_position', wheel)
+      .order('sensor_id')
+      .then(({ data, error }) => {
+        if (error) { console.log('tpms_sensors:', error.message); setStockSensors([]); }
+        else setStockSensors(data ?? []);
+        setFetching(false);
+      });
+  }, [visible, wheel]);
+
+  const assign = async () => {
+    if (!selectedId) { alertOk('Erreur', 'Sélectionnez un capteur.'); return; }
     setLoading(true);
     try {
+      // Mettre à jour tpms_sensors avec scooter_id
+      const { error: e1 } = await supabase.from('tpms_sensors')
+        .update({ scooter_id: scooterId })
+        .eq('id', selectedId);
+      if (e1) throw e1;
+      // Mettre à jour le champ sur scooters
+      const sensor = stockSensors.find(s => s.id === selectedId);
       const col = wheel === 'AV' ? 'tpms_id_front' : 'tpms_id_rear';
-      const { error } = await supabase.from('scooters').update({ [col]: tpmsId.trim() }).eq('id', scooterId);
-      if (error) throw error;
+      await supabase.from('scooters').update({ [col]: sensor?.sensor_id ?? '' }).eq('id', scooterId);
       onSaved(); onClose();
     } catch (e) { alertOk('Erreur', e.message); }
     finally     { setLoading(false); }
@@ -145,16 +199,65 @@ function TpmsFormModal({ visible, onClose, onSaved, scooterId, wheel }) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
-        <View style={{ backgroundColor: C.accent, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28 }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'center', marginBottom: 20 }} />
-          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 20, textAlign: 'center' }}>TPMS {wheel}.</Text>
-          <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>ID :</Text>
-          <TextInput value={tpmsId} onChangeText={setTpmsId} placeholder="ex: RAF3G5" placeholderTextColor="rgba(255,255,255,0.4)" autoCapitalize="characters"
-            style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 20 }}
-          />
-          <TouchableOpacity onPress={save} disabled={loading} activeOpacity={0.8}
-            style={{ backgroundColor: C.white, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
-            {loading ? <ActivityIndicator color={C.accent} /> : <Text style={{ fontSize: 16, fontWeight: '900', color: C.accent }}>Valider</Text>}
+        <View style={{
+          backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24,
+          maxHeight: '70%',
+        }}>
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 20 }} />
+          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 16, textAlign: 'center' }}>
+            Assigner TPMS {wheel}.
+          </Text>
+
+          <Text style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+            Capteurs {wheel} en stock ({stockSensors.length})
+          </Text>
+
+          {fetching ? (
+            <ActivityIndicator color={C.accent} style={{ marginVertical: 20 }} />
+          ) : stockSensors.length === 0 ? (
+            <View style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 24, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: C.border }}>
+              <Text style={{ fontSize: 28, marginBottom: 8 }}>⚙️</Text>
+              <Text style={{ fontSize: 13, color: C.textMuted, textAlign: 'center' }}>
+                Aucun capteur TPMS {wheel} en stock.{'\n'}Ajoutez-en via ☰ → Ajouter TPMS
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
+              {stockSensors.map(s => {
+                const selected = selectedId === s.id;
+                return (
+                  <TouchableOpacity key={s.id} onPress={() => setSelectedId(s.id)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      backgroundColor: selected ? C.accent + '22' : C.bgElevated,
+                      borderRadius: 12, padding: 12, marginBottom: 6,
+                      borderWidth: 2,
+                      borderColor: selected ? C.accent : C.border,
+                    }}>
+                    <Text style={{ fontSize: 22 }}>⚙️</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>TPMS {s.wheel_position}.</Text>
+                      <Text style={{ fontSize: 11, color: C.accentBright, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
+                        ID: {s.sensor_id}
+                      </Text>
+                    </View>
+                    {selected && (
+                      <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: C.white, fontSize: 14, fontWeight: '800' }}>✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          <TouchableOpacity onPress={assign} disabled={loading || !selectedId} activeOpacity={0.8}
+            style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', opacity: (loading || !selectedId) ? 0.5 : 1 }}>
+            {loading
+              ? <ActivityIndicator color={C.white} />
+              : <Text style={{ fontSize: 16, fontWeight: '900', color: C.white }}>Assigner TPMS {wheel}.</Text>}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -164,28 +267,18 @@ function TpmsFormModal({ visible, onClose, onSaved, scooterId, wheel }) {
 
 // ── Battery card (style Figma) ──────────────────────────────
 
-function BatteryCard({ item, onEdit, onDelete }) {
+function BatteryCard({ item, onUnassign, onDelete }) {
   const soc       = item.soc;
   const color     = battColor(soc);
   const slotLabel = item.slot === 3 ? 'Batterie reserve' : `Batterie ${item.slot ?? '?'}`;
 
-  const statusLabel = item.bms_status === 'charging'    ? 'En charge'
-                    : item.bms_status === 'discharging' ? 'Active'
-                    : item.bms_status === 'idle'        ? 'Stable'
-                    : item.bms_status === 'error'       ? 'Erreur'
-                    : soc != null                        ? 'Stable'
+  const statusLabel = soc != null && soc > 20  ? 'Stable'
+                    : soc != null && soc <= 20 ? 'Faible'
                     : 'Indisponible';
 
-  const statusColor = statusLabel === 'En charge'   ? C.success
-                    : statusLabel === 'Active'       ? C.accentBright
-                    : statusLabel === 'Stable'       ? C.success
-                    : statusLabel === 'Erreur'       ? C.danger
+  const statusColor = statusLabel === 'Stable'  ? C.success
+                    : statusLabel === 'Faible'  ? C.warning
                     : C.textMuted;
-
-  // Couleur wifi selon statut
-  const wifiColor = statusLabel === 'En charge' ? '#FF8C00'
-                  : statusLabel === 'Stable'    ? C.success
-                  : C.textMuted;
 
   return (
     <View style={{
@@ -209,8 +302,8 @@ function BatteryCard({ item, onEdit, onDelete }) {
           <Text style={{ fontSize: 11, fontWeight: '800', color: C.white }}>{statusLabel}</Text>
         </View>
 
-        {/* Settings */}
-        <TouchableOpacity onPress={() => onEdit(item)}
+        {/* Unassign (retour stock) */}
+        <TouchableOpacity onPress={() => onUnassign(item)}
           style={{
             width: 32, height: 32, borderRadius: 8,
             backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center',
@@ -266,7 +359,6 @@ export default function DashboardScreen({ route, navigation }) {
   const [batteries,     setBatteries]     = useState([]);
   const [battLoading,   setBattLoading]   = useState(true);
   const [showBattForm,  setShowBattForm]  = useState(false);
-  const [editingBatt,   setEditingBatt]   = useState(null);
   const [showTpmsForm,  setShowTpmsForm]  = useState(false);
   const [tpmsWheel,     setTpmsWheel]     = useState('AV');
   const [telemetry,     setTelemetry]     = useState(null);
@@ -292,10 +384,24 @@ export default function DashboardScreen({ route, navigation }) {
     if (data) setTelemetry(data);
   };
 
+  const unassignBattery = (item) => {
+    setAttention({
+      visible: true,
+      label: `Retirer "${item.serial_number}" et remettre en stock ?`,
+      action: async () => {
+        const { error } = await supabase.from('batteries')
+          .update({ scooter_id: null, slot: null })
+          .eq('id', item.id);
+        if (error) alertOk('Erreur', error.message);
+        else fetchBatteries();
+      },
+    });
+  };
+
   const deleteBattery = (item) => {
     setAttention({
       visible: true,
-      label: `Supprimer "${item.serial_number}" ?`,
+      label: `Supprimer définitivement "${item.serial_number}" ?`,
       action: async () => {
         const { error } = await supabase.from('batteries').delete().eq('id', item.id);
         if (error) alertOk('Erreur', error.message);
@@ -384,14 +490,14 @@ export default function DashboardScreen({ route, navigation }) {
         ) : (
           batteries.map(b => (
             <BatteryCard key={b.id} item={b}
-              onEdit={item => { setEditingBatt(item); setShowBattForm(true); }}
+              onUnassign={unassignBattery}
               onDelete={deleteBattery}
             />
           ))
         )}
 
         {batteries.length < MAX_BATTERIES && (
-          <TouchableOpacity onPress={() => { setEditingBatt(null); setShowBattForm(true); }}
+          <TouchableOpacity onPress={() => setShowBattForm(true)}
             style={{ borderWidth: 1, borderColor: C.accent, borderRadius: 12, padding: 12, alignItems: 'center', marginTop: 6 }}>
             <Text style={{ fontSize: 13, fontWeight: '800', color: C.accentBright }}>+ Ajouter batterie</Text>
           </TouchableOpacity>
@@ -526,19 +632,18 @@ export default function DashboardScreen({ route, navigation }) {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      <BatteryFormModal
+      <BatteryPickerModal
         visible={showBattForm}
         onClose={() => setShowBattForm(false)}
         onSaved={fetchBatteries}
         scooterId={scooter?.id}
-        initial={editingBatt}
         usedSlots={usedSlots}
       />
 
-      <TpmsFormModal
+      <TpmsPickerModal
         visible={showTpmsForm}
         onClose={() => setShowTpmsForm(false)}
-        onSaved={() => {}}
+        onSaved={fetchTelemetry}
         scooterId={scooter?.id}
         wheel={tpmsWheel}
       />

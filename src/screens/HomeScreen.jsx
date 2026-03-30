@@ -406,8 +406,8 @@ export default function HomeScreen({ navigation }) {
     if (key === 'addScooter')      { setEditingScooter(null); setShowForm(true); }
     else if (key === 'parametres') navigation.navigate('Parametres');
     else if (key === 'compte')     setShowLogout(true);
-    else if (key === 'addBatterie' && scooters.length > 0) navigation.navigate('Dashboard', { scooter: scooters[0], openBatterie: true });
-    else if (key === 'addTpms'     && scooters.length > 0) navigation.navigate('Dashboard', { scooter: scooters[0], openTpms: true });
+    else if (key === 'addBatterie') navigation.navigate('BatteryStock');
+    else if (key === 'addTpms')     navigation.navigate('TpmsStock');
   };
 
   // Filtrage par recherche
