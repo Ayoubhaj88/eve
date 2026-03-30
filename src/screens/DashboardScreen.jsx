@@ -182,49 +182,76 @@ function BatteryCard({ item, onEdit, onDelete }) {
                     : statusLabel === 'Erreur'       ? C.danger
                     : C.textMuted;
 
+  // Couleur wifi selon statut
+  const wifiColor = statusLabel === 'En charge' ? '#FF8C00'
+                  : statusLabel === 'Stable'    ? C.success
+                  : C.textMuted;
+
   return (
     <View style={{
-      backgroundColor: C.bgCard, borderRadius: 14,
-      borderWidth: 1, borderColor: C.border, padding: 14,
-      marginBottom: 8,
+      backgroundColor: C.bgCard, borderRadius: 16,
+      borderWidth: 1, borderColor: C.border,
+      padding: 14, marginBottom: 8,
     }}>
-      {/* Row 1: label + status badge + icons */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-        <Text style={{ flex: 1, fontSize: 13, fontWeight: '800', color: C.white }}>{slotLabel}</Text>
+      {/* Row 1 : Nom + Badge status + ⚙️ ✕ */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={{ flex: 1, fontSize: 15, fontWeight: '900', color: C.white }}>{slotLabel}</Text>
 
         {/* Status badge */}
         <View style={{
-          paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8,
-          backgroundColor: statusColor + '22', borderWidth: 1, borderColor: statusColor + '44',
-          marginRight: 8,
+          paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20,
+          backgroundColor: statusColor === C.success ? C.success
+            : statusColor === C.accentBright ? C.accentBright
+            : statusColor === C.danger ? C.danger
+            : C.bgElevated,
+          marginRight: 10,
         }}>
-          <Text style={{ fontSize: 9, fontWeight: '700', color: statusColor }}>{statusLabel}</Text>
+          <Text style={{ fontSize: 11, fontWeight: '800', color: C.white }}>{statusLabel}</Text>
         </View>
 
-        {/* Wifi icon */}
-        <Text style={{ fontSize: 14, marginRight: 6 }}>📶</Text>
         {/* Settings */}
-        <TouchableOpacity onPress={() => onEdit(item)}>
-          <Text style={{ fontSize: 14, marginRight: 6 }}>⚙️</Text>
+        <TouchableOpacity onPress={() => onEdit(item)}
+          style={{
+            width: 32, height: 32, borderRadius: 8,
+            backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center',
+            borderWidth: 1, borderColor: C.border, marginRight: 6,
+          }}>
+          <Text style={{ fontSize: 16 }}>⚙️</Text>
         </TouchableOpacity>
+
         {/* Delete */}
-        <TouchableOpacity onPress={() => onDelete(item)}>
-          <Text style={{ fontSize: 14, color: C.danger }}>✕</Text>
+        <TouchableOpacity onPress={() => onDelete(item)}
+          style={{
+            width: 32, height: 32, borderRadius: 8,
+            backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center',
+            borderWidth: 1, borderColor: C.border,
+          }}>
+          <Text style={{ fontSize: 16, color: C.accentBright, fontWeight: '800' }}>✕</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Row 2: SOC + N° Serie */}
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 16 }}>
-        <Text style={{ fontSize: 28, fontWeight: '900', color, letterSpacing: -1 }}>
+      {/* Row 2 : SOC% + Wifi + N° Serie : [valeur] */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={{ fontSize: 32, fontWeight: '900', color, letterSpacing: -1 }}>
           {soc != null ? soc.toFixed(0) + '%' : 'NA'}
         </Text>
-        <View>
-          <Text style={{ fontSize: 10, color: C.textMuted }}>N° Serie :</Text>
-          {item.serial_number ? (
-            <Text style={{ fontSize: 11, color: C.accentBright, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
-              {item.serial_number}
+
+
+        {/* N° Serie */}
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>N° Serie :</Text>
+          <View style={{
+            flex: 1, backgroundColor: C.bgElevated, borderRadius: 8,
+            paddingHorizontal: 10, paddingVertical: 5,
+            borderWidth: 1, borderColor: C.border,
+          }}>
+            <Text style={{
+              fontSize: 11, color: C.accentBright,
+              fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+            }}>
+              {item.serial_number ?? '—'}
             </Text>
-          ) : null}
+          </View>
         </View>
       </View>
     </View>

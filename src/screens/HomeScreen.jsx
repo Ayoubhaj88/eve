@@ -117,7 +117,7 @@ function ScooterCard({ item, onPress }) {
         <IndicCell>
           <Image
             source={require('../../assets/battr.png')}
-            style={{ width: 30, height: 30, tintColor: '#000000' }}
+            style={{ width: 40, height: 40, tintColor: '#000000' }}
             resizeMode="contain"
           />
           <BatteryDashes batteries={batteries} />
