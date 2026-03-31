@@ -1,382 +1,506 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView,
-  StatusBar, Platform, TextInput, ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView, Switch,
+  StatusBar, Platform, TextInput,
 } from 'react-native';
-import { supabase } from '../lib/supabaseClient';
 import { C, alertOk } from '../constants';
 
-// ── Jauge semi-circulaire gyroscope ─────────────────────────
+// ── Composants réutilisables ─────────────────────────────────
 
-function SemiGauge({ value, min = 0, max = 180, color = C.accentBright, label }) {
-  const pct   = Math.min(Math.max((value - min) / (max - min), 0), 1);
-  const angle = pct * 180; // 0° = gauche, 180° = droite
-
+function Header({ title, subtitle, onBack }) {
   return (
-    <View style={{ alignItems: 'center', gap: 8 }}>
-      {/* Représentation textuelle de la jauge */}
-      <View style={{
-        width: 160, height: 80, borderRadius: 80,
-        borderWidth: 3, borderColor: C.border,
-        borderBottomWidth: 0,
-        backgroundColor: C.bgElevated,
-        overflow: 'hidden',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        paddingBottom: 8,
-      }}>
-        {/* Remplissage */}
-        <View style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          height: Math.max(4, pct * 76),
-          backgroundColor: color + '33',
-        }} />
-        {/* Valeur */}
-        <Text style={{ fontSize: 22, fontWeight: '900', color, letterSpacing: -1 }}>
-          {value != null ? `${value.toFixed(0)}°` : '—'}
+    <View style={{
+      paddingTop: Platform.OS === 'ios' ? 60 : 40,
+      paddingHorizontal: 20, paddingBottom: 16,
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      borderBottomWidth: 1, borderBottomColor: C.border,
+    }}>
+      <TouchableOpacity onPress={onBack}
+        style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.bgCard, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+        <Text style={{ fontSize: 18, color: C.white }}>‹</Text>
+      </TouchableOpacity>
+      <View>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: C.white, letterSpacing: -0.5 }}>
+          {title}
         </Text>
-      </View>
-
-      {/* Barre de progression */}
-      <View style={{ width: 160, height: 6, borderRadius: 3, backgroundColor: C.bgElevated, overflow: 'hidden', borderWidth: 1, borderColor: C.border }}>
-        <View style={{ width: pct * 100 + '%', height: '100%', borderRadius: 3, backgroundColor: color }} />
-      </View>
-
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: 160 }}>
-        <Text style={{ fontSize: 8, color: C.textMuted }}>{min}°</Text>
-        <Text style={{ fontSize: 9, fontWeight: '700', color: C.textMuted }}>{label}</Text>
-        <Text style={{ fontSize: 8, color: C.textMuted }}>{max}°</Text>
+        {subtitle ? (
+          <Text style={{ fontSize: 10, color: C.accentBright, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
 }
 
-// ── Jauge circulaire TPMS (style speedometer) ───────────────
-
-function CircularGauge({ value, min = 0.5, max = 4.5, color = C.accentBright }) {
-  const pct = Math.min(Math.max((value - min) / (max - min), 0), 1);
-  const mid  = (min + max) / 2;
-
+function SectionLabel({ text }) {
   return (
-    <View style={{ alignItems: 'center', gap: 12 }}>
-      <View style={{
-        width: 160, height: 160, borderRadius: 80,
-        borderWidth: 3, borderColor: C.border,
-        backgroundColor: C.bgElevated,
-        justifyContent: 'center', alignItems: 'center',
-        position: 'relative',
-      }}>
-        {/* Cercle de progression */}
-        <View style={{
-          position: 'absolute',
-          width: 140, height: 140, borderRadius: 70,
-          borderWidth: 8,
-          borderColor: C.border,
-          borderTopColor: pct > 0.5 ? color : C.border,
-          borderRightColor: pct > 0.25 ? color : C.border,
-        }} />
+    <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+      {text}
+    </Text>
+  );
+}
 
-        {/* Valeur centrale */}
-        <Text style={{ fontSize: 32, fontWeight: '900', color, letterSpacing: -1 }}>
-          {value != null ? value.toFixed(1) : '—'}
-        </Text>
-        <Text style={{ fontSize: 11, color: C.textMuted }}>Bar</Text>
-
-        {/* Aiguille indicateur */}
-        <View style={{
-          position: 'absolute', bottom: 10,
-          flexDirection: 'row', alignItems: 'center', gap: 4,
-        }}>
-          <Text style={{ fontSize: 9, color: C.textMuted }}>{min}</Text>
-          <View style={{ width: 60, height: 3, borderRadius: 2, backgroundColor: C.bgCard, overflow: 'hidden' }}>
-            <View style={{ width: pct * 100 + '%', height: '100%', backgroundColor: color }} />
-          </View>
-          <Text style={{ fontSize: 9, color: C.textMuted }}>{max}</Text>
-        </View>
-      </View>
-
-      {/* Légende */}
-      <View style={{ flexDirection: 'row', gap: 20 }}>
-        {[
-          { label: String(min), sub: 'min' },
-          { label: String(mid.toFixed(1)), sub: 'moy' },
-          { label: String(max), sub: 'max' },
-        ].map(({ label, sub }) => (
-          <View key={sub} style={{ alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontWeight: '800', color: C.white }}>{label}</Text>
-            <Text style={{ fontSize: 8, color: C.textMuted }}>{sub}</Text>
-          </View>
-        ))}
+function FieldRow({ label, value, onChangeText, unit, width = 60 }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+      <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          keyboardType="numeric"
+          style={{
+            backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+            color: C.accentBright, fontSize: 14, fontWeight: '800', width, textAlign: 'center',
+            borderWidth: 1, borderColor: C.accent + '44',
+          }}
+        />
+        {unit ? <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>{unit}</Text> : null}
       </View>
     </View>
   );
 }
 
-// ── Onglet Gyroscope ────────────────────────────────────────
-
-function GyroscopeTab({ scooter }) {
-  const [droiteVal, setDroiteVal] = useState('30');
-  const [gaucheVal, setGaucheVal] = useState('130');
-  const [avantVal,  setAvantVal]  = useState('25');
-  const [loading,   setLoading]   = useState(false);
-
-  useEffect(() => {
-    if (!scooter?.id) return;
-    supabase.from('scooters')
-      .select('gyro_threshold_right, gyro_threshold_left, gyro_threshold_front')
-      .eq('id', scooter.id).single()
-      .then(({ data }) => {
-        if (!data) return;
-        if (data.gyro_threshold_right != null) setDroiteVal(String(data.gyro_threshold_right));
-        if (data.gyro_threshold_left  != null) setGaucheVal(String(data.gyro_threshold_left));
-        if (data.gyro_threshold_front != null) setAvantVal(String(data.gyro_threshold_front));
-      });
-  }, [scooter?.id]);
-
-  const save = async () => {
-    const d = parseFloat(droiteVal);
-    const g = parseFloat(gaucheVal);
-    const a = parseFloat(avantVal);
-    if ([d, g, a].some(isNaN)) { alertOk('Erreur', 'Valeurs invalides'); return; }
-    setLoading(true);
-    const { error } = await supabase.from('scooters').update({
-      gyro_threshold_right: d,
-      gyro_threshold_left:  g,
-      gyro_threshold_front: a,
-    }).eq('id', scooter?.id);
-    setLoading(false);
-    if (error) alertOk('Erreur', error.message);
-    else alertOk('Succès', 'Seuils enregistrés.');
-  };
-
-  const droite = parseFloat(droiteVal) || 30;
-  const gauche = parseFloat(gaucheVal) || 130;
-  const avant  = parseFloat(avantVal)  || 25;
-
+function DoubleFieldRow({ label, value1, onChangeText1, value2, onChangeText2, unit }) {
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }} showsVerticalScrollIndicator={false}>
-      {/* Droite / Gauche */}
-      <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: C.border, gap: 16, alignItems: 'center' }}>
-        <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, alignSelf: 'flex-start' }}>
-          Droite / Gauche
-        </Text>
-
-        <View style={{ flexDirection: 'row', gap: 20 }}>
-          <SemiGauge value={droite} label="Droite" color="#FF6B6B" />
-          <SemiGauge value={gauche} label="Gauche" color="#51CF66" />
-        </View>
-
-        <View style={{ width: '100%', gap: 10 }}>
-          {[
-            { label: 'Seuil Droite (D)', value: droiteVal, set: setDroiteVal, color: '#FF6B6B' },
-            { label: 'Seuil Gauche (G)', value: gaucheVal, set: setGaucheVal, color: '#51CF66' },
-          ].map(({ label, value, set, color }) => (
-            <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.bgElevated, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border }}>
-              <Text style={{ fontSize: 11, color: C.textMuted }}>Seuil actuelle ({label.includes('D)') ? 'D' : 'G'}) :</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <TextInput
-                  value={value}
-                  onChangeText={set}
-                  keyboardType="numeric"
-                  style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, color, fontSize: 14, fontWeight: '800', width: 60, textAlign: 'center', borderWidth: 1, borderColor: color + '55' }}
-                />
-                <Text style={{ fontSize: 11, color: C.textMuted }}>°</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+      <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <TextInput value={value1} onChangeText={onChangeText1} keyboardType="numeric"
+          style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 50, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+        <TextInput value={value2} onChangeText={onChangeText2} keyboardType="numeric"
+          style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 50, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+        {unit ? <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>{unit}</Text> : null}
       </View>
-
-      {/* Avant */}
-      <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: C.border, gap: 16, alignItems: 'center' }}>
-        <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, alignSelf: 'flex-start' }}>
-          Avant
-        </Text>
-
-        <SemiGauge value={avant} label="Avant" color="#339AF0" />
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.bgElevated, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border, width: '100%' }}>
-          <Text style={{ fontSize: 11, color: C.textMuted }}>Seuil actuelle :</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TextInput
-              value={avantVal}
-              onChangeText={setAvantVal}
-              keyboardType="numeric"
-              style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, color: '#339AF0', fontSize: 14, fontWeight: '800', width: 60, textAlign: 'center', borderWidth: 1, borderColor: '#339AF055' }}
-            />
-            <Text style={{ fontSize: 11, color: C.textMuted }}>°</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Valider */}
-      <TouchableOpacity onPress={save} disabled={loading} activeOpacity={0.8}
-        style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
-        {loading
-          ? <ActivityIndicator color={C.white} />
-          : <Text style={{ fontSize: 15, fontWeight: '900', color: C.white }}>Valider</Text>}
-      </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 }
 
-// ── Onglet TPMS ─────────────────────────────────────────────
-
-function TpmsTab({ scooter }) {
-  const [seuil,   setSeuil]   = useState('2.5');
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!scooter?.id) return;
-    supabase.from('scooters').select('tpms_threshold').eq('id', scooter.id).single()
-      .then(({ data }) => { if (data?.tpms_threshold != null) setSeuil(String(data.tpms_threshold)); });
-  }, [scooter?.id]);
-
-  const save = async () => {
-    const val = parseFloat(seuil);
-    if (isNaN(val) || val < 0.5 || val > 4.5) { alertOk('Erreur', 'Seuil invalide (0.5 – 4.5 bar)'); return; }
-    setLoading(true);
-    const { error } = await supabase.from('scooters')
-      .update({ tpms_threshold: val }).eq('id', scooter?.id);
-    setLoading(false);
-    if (error) alertOk('Erreur', error.message);
-    else alertOk('Succès', 'Seuil TPMS enregistré.');
-  };
-
-  const seuilVal = parseFloat(seuil) || 2.5;
-
+function ToggleRow({ label, value, onValueChange }) {
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 24, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
-      <View style={{ backgroundColor: C.bgCard, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border, gap: 20, width: '100%', alignItems: 'center' }}>
-        <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, alignSelf: 'flex-start' }}>
-          TPMS
-        </Text>
-
-        <CircularGauge value={seuilVal} />
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.bgElevated, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border, width: '100%' }}>
-          <Text style={{ fontSize: 11, color: C.textMuted }}>Seuil actuelle :</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TextInput
-              value={seuil}
-              onChangeText={setSeuil}
-              keyboardType="numeric"
-              style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 70, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '55' }}
-            />
-            <Text style={{ fontSize: 11, color: C.textMuted }}>Bar</Text>
-          </View>
-        </View>
-      </View>
-
-      <TouchableOpacity onPress={save} disabled={loading} activeOpacity={0.8}
-        style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', width: '100%', opacity: loading ? 0.6 : 1 }}>
-        {loading
-          ? <ActivityIndicator color={C.white} />
-          : <Text style={{ fontSize: 15, fontWeight: '900', color: C.white }}>Valider</Text>}
-      </TouchableOpacity>
-    </ScrollView>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 }}>
+      <Text style={{ fontSize: 14, fontWeight: '700', color: C.white }}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: C.bgElevated, true: C.accent }}
+        thumbColor={value ? C.white : C.textMuted}
+      />
+    </View>
   );
 }
 
-// ── Onglet Notifications ────────────────────────────────────
-
-function NotificationsTab() {
-  const CATEGORIES = ['Batterie', 'TPMS', 'Sabotage', 'Chute', 'GPS'];
-
+function Card({ children, style }) {
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }} showsVerticalScrollIndicator={false}>
-      {CATEGORIES.map(cat => (
-        <View key={cat} style={{
-          backgroundColor: C.bgCard, borderRadius: 14, padding: 16,
-          borderWidth: 1, borderColor: C.border,
-          flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: C.white }}>{cat}</Text>
-          <View style={{
-            backgroundColor: C.accent, borderRadius: 20,
-            paddingHorizontal: 14, paddingVertical: 6,
-          }}>
-            <Text style={{ fontSize: 12, fontWeight: '800', color: C.white }}>en cours</Text>
-          </View>
-        </View>
-      ))}
-    </ScrollView>
+    <View style={[{
+      backgroundColor: C.bgCard, borderRadius: 16, padding: 18,
+      borderWidth: 1, borderColor: C.border,
+    }, style]}>
+      {children}
+    </View>
   );
 }
 
-// ── Écran Paramètres ────────────────────────────────────────
+function BigButton({ label, onPress, active }) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}
+      style={{
+        backgroundColor: active ? C.accent : C.bgCard,
+        borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+        borderWidth: 2, borderColor: active ? C.accentBright : C.border,
+      }}>
+      <Text style={{ fontSize: 16, fontWeight: '900', color: C.white }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
-const SEUILS_TABS  = ['Gyroscope', 'TPMS'];
-const MAIN_TABS    = ['Seuils', 'Notifications'];
+function CategoryButton({ label, onPress }) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}
+      style={{
+        backgroundColor: C.accent, borderRadius: 14,
+        paddingVertical: 18, alignItems: 'center',
+        borderWidth: 1, borderColor: C.accentBright,
+      }}>
+      <Text style={{ fontSize: 16, fontWeight: '900', color: C.white }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
-export default function ParametresScreen({ route, navigation }) {
-  const scooter    = route.params?.scooter ?? null;
-  const initTab    = route.params?.tab === 'gyroscope' ? 0 : 0;
+// ── Écran GYROSCOPE (Notifications) ──────────────────────────
 
-  const [mainTab,   setMainTab]   = useState(0);   // 0=Seuils, 1=Notifications
-  const [seuilTab,  setSeuilTab]  = useState(initTab); // 0=Gyroscope, 1=TPMS
+function GyroscopeNotifScreen({ onBack }) {
+  const [rotG, setRotG] = useState('');
+  const [rotD, setRotD] = useState('');
+  const [rotA, setRotA] = useState('');
+  const [son,  setSon]  = useState(true);
+  const [msg,  setMsg]  = useState('');
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <Header title="GYROSCOPE" subtitle="Notifications" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+        <Card>
+          <SectionLabel text="Seuils" />
+          <FieldRow label="Rotation Gauche" value={rotG} onChangeText={setRotG} unit="XX °" />
+          <FieldRow label="Rotation Droite" value={rotD} onChangeText={setRotD} unit="XX °" />
+          <FieldRow label="Rotation Avant" value={rotA} onChangeText={setRotA} unit="XX °" />
+        </Card>
 
-      {/* Header */}
-      <View style={{
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        paddingHorizontal: 20, paddingBottom: 16,
-        flexDirection: 'row', alignItems: 'center', gap: 12,
-        borderBottomWidth: 1, borderBottomColor: C.border,
-      }}>
-        <TouchableOpacity onPress={() => navigation.goBack()}
-          style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: C.bgCard, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
-          <Text style={{ fontSize: 20, color: C.white }}>‹</Text>
-        </TouchableOpacity>
-        <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, letterSpacing: -0.5 }}>
-          PARAMETRES
-        </Text>
-      </View>
+        <Card>
+          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+        </Card>
 
-      {/* Onglets principaux : Seuils / Notifications */}
-      <View style={{ flexDirection: 'row', margin: 20, marginBottom: 0, gap: 10 }}>
-        {MAIN_TABS.map((tab, i) => (
-          <TouchableOpacity key={tab} onPress={() => setMainTab(i)} style={{ flex: 1 }}>
-            <View style={{
-              paddingVertical: 12, borderRadius: 12, alignItems: 'center',
-              backgroundColor: mainTab === i ? C.accent : C.bgCard,
-              borderWidth: 1, borderColor: mainTab === i ? C.accent : C.border,
-            }}>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>{tab}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
+        <Card>
+          <SectionLabel text="Message" />
+          <TextInput
+            value={msg} onChangeText={setMsg}
+            placeholder="Écrire votre message"
+            placeholderTextColor={C.textMuted}
+            multiline
+            style={{
+              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
+              borderWidth: 1, borderColor: C.border,
+            }}
+          />
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
 
-      {/* Sous-onglets Seuils : Gyroscope / TPMS */}
-      {mainTab === 0 && (
-        <View style={{ flexDirection: 'row', marginHorizontal: 20, marginTop: 12, marginBottom: 0, gap: 10 }}>
-          {SEUILS_TABS.map((tab, i) => (
-            <TouchableOpacity key={tab} onPress={() => setSeuilTab(i)} style={{ flex: 1 }}>
+// ── Écran TPMS (Notifications) ───────────────────────────────
+
+function TpmsNotifScreen({ onBack }) {
+  const [moyen,    setMoyen]    = useState('');
+  const [critique, setCritique] = useState('');
+  const [type,     setType]     = useState('');
+  const [alarme,   setAlarme]   = useState(true);
+  const [plein,    setPlein]    = useState(false);
+  const [son,      setSon]      = useState(true);
+  const [msg,      setMsg]      = useState('');
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <Header title="TPMS" subtitle="Notifications" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+        <Card>
+          <SectionLabel text="Seuils" />
+          <FieldRow label="Moyen" value={moyen} onChangeText={setMoyen} unit="XX Bar" />
+          <FieldRow label="Critique" value={critique} onChangeText={setCritique} unit="XX Bar" />
+          <FieldRow label="Type" value={type} onChangeText={setType} />
+        </Card>
+
+        <Card>
+          <ToggleRow label="Alarme" value={alarme} onValueChange={setAlarme} />
+          <ToggleRow label="Plein ecran" value={plein} onValueChange={setPlein} />
+          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+        </Card>
+
+        <Card>
+          <SectionLabel text="Message" />
+          <TextInput
+            value={msg} onChangeText={setMsg}
+            placeholder="Écrire votre message"
+            placeholderTextColor={C.textMuted}
+            multiline
+            style={{
+              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
+              borderWidth: 1, borderColor: C.border,
+            }}
+          />
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Écran BATTERIE (Notifications) ───────────────────────────
+
+function BatterieNotifScreen({ onBack }) {
+  const [son,     setSon]     = useState(true);
+  const [msg,     setMsg]     = useState('');
+  const [alm1,    setAlm1]    = useState('');
+  const [alm2,    setAlm2]    = useState('');
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <Header title="BATTERIE" subtitle="Notifications" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+        <Card>
+          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+        </Card>
+
+        <Card>
+          <SectionLabel text="Message" />
+          <TextInput
+            value={msg} onChangeText={setMsg}
+            placeholder="Écrire votre message"
+            placeholderTextColor={C.textMuted}
+            multiline
+            style={{
+              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
+              borderWidth: 1, borderColor: C.border,
+            }}
+          />
+        </Card>
+
+        <Card>
+          <SectionLabel text="Reglage" />
+          <DoubleFieldRow label="Alarme" value1={alm1} onChangeText1={setAlm1} value2={alm2} onChangeText2={setAlm2} unit="%" />
+        </Card>
+
+        <Card style={{ backgroundColor: C.bgElevated }}>
+          <Text style={{ fontSize: 11, color: C.textSecondary, lineHeight: 18 }}>
+            NB: Une notification d'alerte sera envoyée quand la charge totale des batteries du scooter atteint la valeur définie.
+          </Text>
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Écran SABOTAGE (Notifications) ───────────────────────────
+
+function SabotageNotifScreen({ onBack }) {
+  const [son, setSon] = useState(true);
+  const [msg, setMsg] = useState('');
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <Header title="SABOTAGE" subtitle="Notifications" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+        <Card>
+          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+        </Card>
+
+        <Card>
+          <SectionLabel text="Message" />
+          <TextInput
+            value={msg} onChangeText={setMsg}
+            placeholder="Écrire votre message"
+            placeholderTextColor={C.textMuted}
+            multiline
+            style={{
+              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
+              borderWidth: 1, borderColor: C.border,
+            }}
+          />
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Écran ALARME ON (Notifications) ──────────────────────────
+
+function AlarmeOnNotifScreen({ onBack }) {
+  const [son,   setSon]   = useState(true);
+  const [msg,   setMsg]   = useState('');
+  const [delai, setDelai] = useState('');
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <Header title="ALARME ON" subtitle="Notifications" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+        <Card>
+          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+        </Card>
+
+        <Card>
+          <SectionLabel text="Message" />
+          <TextInput
+            value={msg} onChangeText={setMsg}
+            placeholder="Écrire votre message"
+            placeholderTextColor={C.textMuted}
+            multiline
+            style={{
+              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
+              borderWidth: 1, borderColor: C.border,
+            }}
+          />
+        </Card>
+
+        <Card>
+          <SectionLabel text="Reglage" />
+          <FieldRow label="Delai" value={delai} onChangeText={setDelai} unit="S" />
+        </Card>
+
+        <Card style={{ backgroundColor: C.bgElevated }}>
+          <Text style={{ fontSize: 11, color: C.textSecondary, lineHeight: 18 }}>
+            NB: Ce délai est la durée d'attente avant envoi d'une notification après avoir laissé le scooter sans activer l'alarme.
+          </Text>
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Écran ENVOI LED (Notifications → Reglage Fn.) ───────────
+
+function EnvoiLedScreen({ onBack }) {
+  const [type,    setType]    = useState('Continue');
+  const [duree,   setDuree]   = useState('');
+  const [rythme,  setRythme]  = useState('');
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <Header title="ENVOI LED" subtitle="Reglage Fn." onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+        <Card>
+          <SectionLabel text="Type" />
+          {['Continue', 'Clignotant'].map(t => (
+            <TouchableOpacity key={t} onPress={() => setType(t)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }}>
               <View style={{
-                paddingVertical: 10, borderRadius: 10, alignItems: 'center',
-                backgroundColor: seuilTab === i ? C.accentBright : C.bgElevated,
-                borderWidth: 1, borderColor: seuilTab === i ? C.accentBright : C.border,
+                width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                borderColor: type === t ? C.accentBright : C.textMuted,
+                justifyContent: 'center', alignItems: 'center',
               }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: C.white }}>{tab}</Text>
+                {type === t && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.accentBright }} />}
               </View>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: type === t ? C.white : C.textSecondary }}>{t}</Text>
             </TouchableOpacity>
           ))}
-        </View>
-      )}
+        </Card>
 
-      {/* Contenu */}
-      <View style={{ flex: 1, marginTop: 12 }}>
-        {mainTab === 0 ? (
-          seuilTab === 0
-            ? <GyroscopeTab scooter={scooter} />
-            : <TpmsTab      scooter={scooter} />
-        ) : (
-          <NotificationsTab />
-        )}
+        <Card>
+          <SectionLabel text="Reglage" />
+          <FieldRow label="Durée" value={duree} onChangeText={setDuree} unit="S" />
+          <FieldRow label="Rythme" value={rythme} onChangeText={setRythme} unit="XX s" />
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Écran INTERFACE > BATTERIE ───────────────────────────────
+
+function InterfaceBatterieScreen({ onBack }) {
+  const [jauneMin, setJauneMin] = useState('');
+  const [jauneMax, setJauneMax] = useState('');
+  const [rougeMin, setRougeMin] = useState('');
+  const [rougeMax, setRougeMax] = useState('');
+  const [vertVal,  setVertVal]  = useState('');
+  const [alerteV1, setAlerteV1] = useState('');
+  const [alerteV2, setAlerteV2] = useState('');
+  const [alerteV3, setAlerteV3] = useState('');
+  const [blueVal,  setBlueVal]  = useState('');
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <Header title="BATTERIE" subtitle="Interface" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+        <Card>
+          <SectionLabel text="Couleur Des Icons" />
+          <DoubleFieldRow label="Jaune" value1={jauneMin} onChangeText1={setJauneMin} value2={jauneMax} onChangeText2={setJauneMax} unit="%" />
+          <DoubleFieldRow label="Rouge" value1={rougeMin} onChangeText1={setRougeMin} value2={rougeMax} onChangeText2={setRougeMax} unit="%" />
+          <FieldRow label="Vert" value={vertVal} onChangeText={setVertVal} unit="%" />
+        </Card>
+
+        <Card>
+          <SectionLabel text="Couleur D'arrier plan" />
+          <Text style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>Seuiles des batteries</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: C.danger }} />
+              <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>Alerte</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TextInput value={alerteV1} onChangeText={setAlerteV1} keyboardType="numeric"
+                style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 45, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+              <TextInput value={alerteV2} onChangeText={setAlerteV2} keyboardType="numeric"
+                style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 45, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+              <TextInput value={alerteV3} onChangeText={setAlerteV3} keyboardType="numeric"
+                style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 45, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+              <Text style={{ fontSize: 11, color: C.textMuted }}>%</Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: C.accentBright }} />
+              <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>Blue</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TextInput value={blueVal} onChangeText={setBlueVal} keyboardType="numeric"
+                style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 50, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+              <Text style={{ fontSize: 11, color: C.textMuted }}>%</Text>
+            </View>
+          </View>
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Liste Notifications ──────────────────────────────────────
+
+const NOTIF_CATEGORIES = [
+  { key: 'batterie',  label: 'BATTERIE'  },
+  { key: 'tpms',      label: 'TPMS'      },
+  { key: 'gyroscope', label: 'GYROSCOPE' },
+  { key: 'sabotage',  label: 'SABOTAGE'  },
+  { key: 'alarmeOn',  label: 'ALARME ON' },
+  { key: 'envoiLed',  label: 'ENVOI LED' },
+];
+
+// ── Écran principal Parametres ───────────────────────────────
+
+export default function ParametresScreen({ navigation }) {
+  // Navigation interne par état
+  const [screen, setScreen] = useState('main'); // main | notifList | gyroscope | tpms | batterie | sabotage | alarmeOn | envoiLed | interfaceBatt
+
+  // ── Sous-écrans ──
+  if (screen === 'gyroscope')    return <GyroscopeNotifScreen onBack={() => setScreen('notifList')} />;
+  if (screen === 'tpms')         return <TpmsNotifScreen      onBack={() => setScreen('notifList')} />;
+  if (screen === 'batterie')     return <BatterieNotifScreen   onBack={() => setScreen('notifList')} />;
+  if (screen === 'sabotage')     return <SabotageNotifScreen   onBack={() => setScreen('notifList')} />;
+  if (screen === 'alarmeOn')     return <AlarmeOnNotifScreen   onBack={() => setScreen('notifList')} />;
+  if (screen === 'envoiLed')     return <EnvoiLedScreen        onBack={() => setScreen('notifList')} />;
+  if (screen === 'interfaceBatt') return <InterfaceBatterieScreen onBack={() => setScreen('interfaceMenu')} />;
+
+  // ── Interface menu ──
+  if (screen === 'interfaceMenu') {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <Header title="PARAMETRES" subtitle="Interface" onBack={() => setScreen('main')} />
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }} showsVerticalScrollIndicator={false}>
+          <CategoryButton label="BATTERIE" onPress={() => setScreen('interfaceBatt')} />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ── Notifications list ──
+  if (screen === 'notifList') {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <Header title="PARAMETRES" subtitle="Notifications" onBack={() => setScreen('main')} />
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }} showsVerticalScrollIndicator={false}>
+          {NOTIF_CATEGORIES.map(cat => (
+            <CategoryButton key={cat.key} label={cat.label} onPress={() => setScreen(cat.key)} />
+          ))}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ── Main screen : Interface / Notifications ──
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <Header title="PARAMETRES" onBack={() => navigation.goBack()} />
+
+      <View style={{ padding: 20, gap: 14 }}>
+        <BigButton label="Interface" onPress={() => setScreen('interfaceMenu')} />
+        <BigButton label="Notifications" onPress={() => setScreen('notifList')} />
       </View>
     </View>
   );

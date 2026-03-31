@@ -181,15 +181,10 @@ function TpmsPickerModal({ visible, onClose, onSaved, scooterId, wheel }) {
     if (!selectedId) { alertOk('Erreur', 'Sélectionnez un capteur.'); return; }
     setLoading(true);
     try {
-      // Mettre à jour tpms_sensors avec scooter_id
-      const { error: e1 } = await supabase.from('tpms_sensors')
+      const { error } = await supabase.from('tpms_sensors')
         .update({ scooter_id: scooterId })
         .eq('id', selectedId);
-      if (e1) throw e1;
-      // Mettre à jour le champ sur scooters
-      const sensor = stockSensors.find(s => s.id === selectedId);
-      const col = wheel === 'AV' ? 'tpms_id_front' : 'tpms_id_rear';
-      await supabase.from('scooters').update({ [col]: sensor?.sensor_id ?? '' }).eq('id', scooterId);
+      if (error) throw error;
       onSaved(); onClose();
     } catch (e) { alertOk('Erreur', e.message); }
     finally     { setLoading(false); }
@@ -361,6 +356,7 @@ export default function DashboardScreen({ route, navigation }) {
   const [showBattForm,  setShowBattForm]  = useState(false);
   const [showTpmsForm,  setShowTpmsForm]  = useState(false);
   const [tpmsWheel,     setTpmsWheel]     = useState('AV');
+  const [tpmsSensors,   setTpmsSensors]   = useState([]);
   const [telemetry,     setTelemetry]     = useState(null);
   const [fallThreshold, setFallThreshold] = useState(scooter?.fall_threshold ?? 2.5);
   const [attention,     setAttention]     = useState({ visible: false, label: '', action: null });
@@ -383,6 +379,16 @@ export default function DashboardScreen({ route, navigation }) {
       .limit(1).maybeSingle();
     if (data) setTelemetry(data);
   };
+
+  const fetchTpms = async () => {
+    if (!scooter?.id) return;
+    const { data } = await supabase.from('tpms_sensors').select('*')
+      .eq('scooter_id', scooter.id);
+    setTpmsSensors(data ?? []);
+  };
+
+  const tpmsFront = tpmsSensors.find(t => t.wheel_position === 'AV');
+  const tpmsRear  = tpmsSensors.find(t => t.wheel_position === 'AR');
 
   const unassignBattery = (item) => {
     setAttention({
@@ -414,7 +420,7 @@ export default function DashboardScreen({ route, navigation }) {
 
   useEffect(() => {
     if (!scooter?.id) return;
-    fetchBatteries(); fetchTelemetry();
+    fetchBatteries(); fetchTelemetry(); fetchTpms();
     supabase.from('scooters').select('fall_threshold').eq('id', scooter.id).single()
       .then(({ data }) => { if (data?.fall_threshold != null) setFallThreshold(data.fall_threshold); });
 
@@ -424,7 +430,10 @@ export default function DashboardScreen({ route, navigation }) {
     const telCh = supabase.channel('tel-' + scooter.id)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry', filter: 'scooter_id=eq.' + scooter.id }, () => fetchTelemetry())
       .subscribe();
-    return () => { supabase.removeChannel(battCh); supabase.removeChannel(telCh); };
+    const tpmsCh = supabase.channel('tpms-' + scooter.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tpms_sensors', filter: 'scooter_id=eq.' + scooter.id }, () => fetchTpms())
+      .subscribe();
+    return () => { supabase.removeChannel(battCh); supabase.removeChannel(telCh); supabase.removeChannel(tpmsCh); };
   }, [scooter?.id]);
 
   if (!scooter) return (
@@ -575,9 +584,9 @@ export default function DashboardScreen({ route, navigation }) {
         <SectionTitle title="TPMS" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {[
-            { label: 'AV.', value: front, tpmsId: scooter.tpms_id_front },
-            { label: 'AR.', value: rear,  tpmsId: scooter.tpms_id_rear  },
-          ].map(({ label, value, tpmsId }) => {
+            { label: 'AV.', wheel: 'AV', value: front, sensor: tpmsFront },
+            { label: 'AR.', wheel: 'AR', value: rear,  sensor: tpmsRear  },
+          ].map(({ label, wheel, value, sensor }) => {
             const temp = telemetry?.tpms_temp;
             return (
               <View key={label} style={{
@@ -605,17 +614,42 @@ export default function DashboardScreen({ route, navigation }) {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={{ flex: 1, fontSize: 10, color: C.accentBright,
                     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
-                    {tpmsId ?? 'RAF3G5'}
+                    {sensor?.sensor_id ?? '—'}
                   </Text>
-                  <TouchableOpacity onPress={() => {
-                    setTpmsWheel(label === 'AV.' ? 'AV' : 'AR');
-                    setShowTpmsForm(true);
-                  }}>
-                    <Text style={{ fontSize: 13 }}>⚙️</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => showAtt(`Supprimer TPMS ${label}`, () => alertOk('Info', 'TPMS supprimé'))}>
-                    <Text style={{ fontSize: 13, color: C.danger }}>✕</Text>
-                  </TouchableOpacity>
+                  {sensor ? (
+                    <>
+                      <TouchableOpacity onPress={() => showAtt(
+                        `Retirer TPMS ${label} et remettre en stock ?`,
+                        async () => {
+                          const { error } = await supabase.from('tpms_sensors')
+                            .update({ scooter_id: null })
+                            .eq('id', sensor.id);
+                          if (error) alertOk('Erreur', error.message);
+                          else fetchTpms();
+                        }
+                      )}>
+                        <Text style={{ fontSize: 13 }}>⚙️</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => showAtt(
+                        `Supprimer TPMS ${label} définitivement ?`,
+                        async () => {
+                          const { error } = await supabase.from('tpms_sensors')
+                            .delete().eq('id', sensor.id);
+                          if (error) alertOk('Erreur', error.message);
+                          else fetchTpms();
+                        }
+                      )}>
+                        <Text style={{ fontSize: 13, color: C.danger }}>✕</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <TouchableOpacity onPress={() => {
+                      setTpmsWheel(wheel);
+                      setShowTpmsForm(true);
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: C.accentBright }}>+ Assigner</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             );
@@ -643,7 +677,7 @@ export default function DashboardScreen({ route, navigation }) {
       <TpmsPickerModal
         visible={showTpmsForm}
         onClose={() => setShowTpmsForm(false)}
-        onSaved={fetchTelemetry}
+        onSaved={fetchTpms}
         scooterId={scooter?.id}
         wheel={tpmsWheel}
       />
