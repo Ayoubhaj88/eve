@@ -72,51 +72,33 @@ function SectionLabel({ text }) {
   );
 }
 
-function StepperBox({ value, onChange, step = 1, min = 0, max = 999 }) {
-  const num = parseFloat(value) || 0;
-  const dec = () => { const v = Math.max(min, num - step); onChange(String(Number.isInteger(step) ? v : v.toFixed(1))); };
-  const inc = () => { const v = Math.min(max, num + step); onChange(String(Number.isInteger(step) ? v : v.toFixed(1))); };
+function NumericInput({ value, onChange }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-      <TouchableOpacity onPress={dec}
-        style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: C.textSecondary }}>−</Text>
-      </TouchableOpacity>
-      <View style={{ minWidth: 44, height: 28, borderRadius: 6, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.accent + '44', paddingHorizontal: 6 }}>
-        <Text style={{ fontSize: 14, fontWeight: '800', color: C.accentBright }}>{value || '0'}</Text>
-      </View>
-      <TouchableOpacity onPress={inc}
-        style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: C.textSecondary }}>+</Text>
-      </TouchableOpacity>
-    </View>
+    <TextInput
+      value={value}
+      onChangeText={onChange}
+      keyboardType="numeric"
+      style={{
+        minWidth: 52, height: 32, borderRadius: 8, backgroundColor: C.bg,
+        paddingHorizontal: 10, color: C.accentBright, fontSize: 14, fontWeight: '800',
+        textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44',
+      }}
+    />
   );
 }
 
-function FieldRow({ label, value, onChangeText, unit, step = 1, min = 0, max = 999 }) {
+function FieldRow({ label, value, onChangeText, unit }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
       <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>{label}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <StepperBox value={value} onChange={onChangeText} step={step} min={min} max={max} />
+        <NumericInput value={value} onChange={onChangeText} />
         {unit ? <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>{unit}</Text> : null}
       </View>
     </View>
   );
 }
 
-function DoubleFieldRow({ label, value1, onChangeText1, value2, onChangeText2, unit, step = 1, min = 0, max = 999 }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
-      <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>{label}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <StepperBox value={value1} onChange={onChangeText1} step={step} min={min} max={max} />
-        <StepperBox value={value2} onChange={onChangeText2} step={step} min={min} max={max} />
-        {unit ? <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>{unit}</Text> : null}
-      </View>
-    </View>
-  );
-}
 
 function ToggleRow({ label, value, onValueChange }) {
   return (
@@ -262,7 +244,7 @@ function TpmsNotifScreen({ onBack }) {
 
 function BatterieNotifScreen({ onBack }) {
   const { values: s, set, save, saving } = useSettings('notif_batterie', {
-    son: true, msg: '', alm1: '', alm2: '',
+    son: true, msg: '', alarme: '',
   });
 
   return (
@@ -277,7 +259,7 @@ function BatterieNotifScreen({ onBack }) {
 
         <Card>
           <SectionLabel text="Reglage" />
-          <DoubleFieldRow label="Alarme" value1={s.alm1} onChangeText1={v => set('alm1', v)} value2={s.alm2} onChangeText2={v => set('alm2', v)} unit="%" />
+          <FieldRow label="Alarme" value={s.alarme} onChangeText={v => set('alarme', v)} unit="%" />
         </Card>
 
         <Card style={{ backgroundColor: C.bgElevated }}>
@@ -392,8 +374,8 @@ function EnvoiLedScreen({ onBack }) {
 
 function InterfaceBatterieScreen({ onBack }) {
   const { values: s, set, save, saving } = useSettings('interface_batterie', {
-    jauneMin: '', jauneMax: '', rougeMin: '', rougeMax: '', vertVal: '',
-    alerteV1: '', alerteV2: '', alerteV3: '', blueVal: '',
+    jaune: '', rouge: '', vert: '',
+    alerte: '', blue: '',
   });
 
   return (
@@ -402,9 +384,9 @@ function InterfaceBatterieScreen({ onBack }) {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
         <Card>
           <SectionLabel text="Couleur Des Icons" />
-          <DoubleFieldRow label="Jaune" value1={s.jauneMin} onChangeText1={v => set('jauneMin', v)} value2={s.jauneMax} onChangeText2={v => set('jauneMax', v)} unit="%" />
-          <DoubleFieldRow label="Rouge" value1={s.rougeMin} onChangeText1={v => set('rougeMin', v)} value2={s.rougeMax} onChangeText2={v => set('rougeMax', v)} unit="%" />
-          <FieldRow label="Vert" value={s.vertVal} onChangeText={v => set('vertVal', v)} unit="%" />
+          <FieldRow label="Jaune" value={s.jaune} onChangeText={v => set('jaune', v)} unit="%" />
+          <FieldRow label="Rouge" value={s.rouge} onChangeText={v => set('rouge', v)} unit="%" />
+          <FieldRow label="Vert"  value={s.vert}  onChangeText={v => set('vert', v)}  unit="%" />
         </Card>
 
         <Card>
@@ -415,10 +397,8 @@ function InterfaceBatterieScreen({ onBack }) {
               <View style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: C.danger }} />
               <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>Alerte</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <StepperBox value={s.alerteV1} onChange={v => set('alerteV1', v)} max={100} />
-              <StepperBox value={s.alerteV2} onChange={v => set('alerteV2', v)} max={100} />
-              <StepperBox value={s.alerteV3} onChange={v => set('alerteV3', v)} max={100} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <NumericInput value={s.alerte} onChange={v => set('alerte', v)} />
               <Text style={{ fontSize: 11, color: C.textMuted }}>%</Text>
             </View>
           </View>
@@ -429,7 +409,7 @@ function InterfaceBatterieScreen({ onBack }) {
               <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>Blue</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <StepperBox value={s.blueVal} onChange={v => set('blueVal', v)} max={100} />
+              <NumericInput value={s.blue} onChange={v => set('blue', v)} />
               <Text style={{ fontSize: 11, color: C.textMuted }}>%</Text>
             </View>
           </View>
