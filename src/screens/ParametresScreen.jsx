@@ -155,18 +155,6 @@ function MsgField({ value, onChangeText }) {
   );
 }
 
-function BigButton({ label, onPress }) {
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8}
-      style={{
-        backgroundColor: C.bgCard, borderRadius: 14, paddingVertical: 16, alignItems: 'center',
-        borderWidth: 2, borderColor: C.border,
-      }}>
-      <Text style={{ fontSize: 16, fontWeight: '900', color: C.white }}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 function CategoryButton({ label, onPress }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8}
@@ -370,57 +358,6 @@ function EnvoiLedScreen({ onBack }) {
   );
 }
 
-// ── Écran INTERFACE > BATTERIE ───────────────────────────────
-
-function InterfaceBatterieScreen({ onBack }) {
-  const { values: s, set, save, saving } = useSettings('interface_batterie', {
-    jaune: '', rouge: '', vert: '',
-    alerte: '', blue: '',
-  });
-
-  return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <Header title="BATTERIE" subtitle="Interface" onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
-        <Card>
-          <SectionLabel text="Couleur Des Icons" />
-          <FieldRow label="Jaune" value={s.jaune} onChangeText={v => set('jaune', v)} unit="%" />
-          <FieldRow label="Rouge" value={s.rouge} onChangeText={v => set('rouge', v)} unit="%" />
-          <FieldRow label="Vert"  value={s.vert}  onChangeText={v => set('vert', v)}  unit="%" />
-        </Card>
-
-        <Card>
-          <SectionLabel text="Couleur D'arrier plan" />
-          <Text style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>Seuiles des batteries</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: C.danger }} />
-              <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>Alerte</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <NumericInput value={s.alerte} onChange={v => set('alerte', v)} />
-              <Text style={{ fontSize: 11, color: C.textMuted }}>%</Text>
-            </View>
-          </View>
-
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: C.accentBright }} />
-              <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>Blue</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <NumericInput value={s.blue} onChange={v => set('blue', v)} />
-              <Text style={{ fontSize: 11, color: C.textMuted }}>%</Text>
-            </View>
-          </View>
-        </Card>
-
-        <SaveButton onPress={save} loading={saving} />
-      </ScrollView>
-    </View>
-  );
-}
-
 // ── Liste Notifications ──────────────────────────────────────
 
 const NOTIF_CATEGORIES = [
@@ -437,46 +374,23 @@ const NOTIF_CATEGORIES = [
 export default function ParametresScreen({ navigation }) {
   const [screen, setScreen] = useState('main');
 
-  if (screen === 'gyroscope')     return <GyroscopeNotifScreen    onBack={() => setScreen('notifList')} />;
-  if (screen === 'tpms')          return <TpmsNotifScreen         onBack={() => setScreen('notifList')} />;
-  if (screen === 'batterie')      return <BatterieNotifScreen     onBack={() => setScreen('notifList')} />;
-  if (screen === 'sabotage')      return <SabotageNotifScreen     onBack={() => setScreen('notifList')} />;
-  if (screen === 'alarmeOn')      return <AlarmeOnNotifScreen     onBack={() => setScreen('notifList')} />;
-  if (screen === 'envoiLed')      return <EnvoiLedScreen          onBack={() => setScreen('notifList')} />;
-  if (screen === 'interfaceBatt') return <InterfaceBatterieScreen onBack={() => setScreen('interfaceMenu')} />;
+  if (screen === 'gyroscope')     return <GyroscopeNotifScreen    onBack={() => setScreen('main')} />;
+  if (screen === 'tpms')          return <TpmsNotifScreen         onBack={() => setScreen('main')} />;
+  if (screen === 'batterie')      return <BatterieNotifScreen     onBack={() => setScreen('main')} />;
+  if (screen === 'sabotage')      return <SabotageNotifScreen     onBack={() => setScreen('main')} />;
+  if (screen === 'alarmeOn')      return <AlarmeOnNotifScreen     onBack={() => setScreen('main')} />;
+  if (screen === 'envoiLed')      return <EnvoiLedScreen          onBack={() => setScreen('main')} />;
 
-  if (screen === 'interfaceMenu') {
-    return (
-      <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <Header title="PARAMETRES" subtitle="Interface" onBack={() => setScreen('main')} />
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }} showsVerticalScrollIndicator={false}>
-          <CategoryButton label="BATTERIE" onPress={() => setScreen('interfaceBatt')} />
-        </ScrollView>
-      </View>
-    );
-  }
-
-  if (screen === 'notifList') {
-    return (
-      <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <Header title="PARAMETRES" subtitle="Notifications" onBack={() => setScreen('main')} />
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }} showsVerticalScrollIndicator={false}>
-          {NOTIF_CATEGORIES.map(cat => (
-            <CategoryButton key={cat.key} label={cat.label} onPress={() => setScreen(cat.key)} />
-          ))}
-        </ScrollView>
-      </View>
-    );
-  }
-
+  // Main = liste des notifications directement
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <Header title="PARAMETRES" onBack={() => navigation.goBack()} />
-      <View style={{ padding: 20, gap: 14 }}>
-        <BigButton label="Interface" onPress={() => setScreen('interfaceMenu')} />
-        <BigButton label="Notifications" onPress={() => setScreen('notifList')} />
-      </View>
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }} showsVerticalScrollIndicator={false}>
+        {NOTIF_CATEGORIES.map(cat => (
+          <CategoryButton key={cat.key} label={cat.label} onPress={() => setScreen(cat.key)} />
+        ))}
+      </ScrollView>
     </View>
   );
 }
