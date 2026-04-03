@@ -1,9 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Switch,
-  StatusBar, Platform, TextInput,
+  StatusBar, Platform, TextInput, ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, alertOk } from '../constants';
+
+// ── Hook persistance AsyncStorage ────────────────────────────
+
+function useSettings(key, defaults) {
+  const [values, setValues] = useState(defaults);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(`settings_${key}`).then(json => {
+      if (json) {
+        try { setValues(prev => ({ ...prev, ...JSON.parse(json) })); } catch {}
+      }
+      setLoaded(true);
+    });
+  }, [key]);
+
+  const set = useCallback((k, v) => setValues(prev => ({ ...prev, [k]: v })), []);
+
+  const save = useCallback(async () => {
+    setSaving(true);
+    try {
+      await AsyncStorage.setItem(`settings_${key}`, JSON.stringify(values));
+      alertOk('Succès', 'Paramètres sauvegardés.');
+    } catch (e) { alertOk('Erreur', e.message); }
+    finally { setSaving(false); }
+  }, [key, values]);
+
+  return { values, set, save, saving, loaded };
+}
 
 // ── Composants réutilisables ─────────────────────────────────
 
@@ -41,36 +72,46 @@ function SectionLabel({ text }) {
   );
 }
 
-function FieldRow({ label, value, onChangeText, unit, width = 60 }) {
+function StepperBox({ value, onChange, step = 1, min = 0, max = 999 }) {
+  const num = parseFloat(value) || 0;
+  const dec = () => { const v = Math.max(min, num - step); onChange(String(Number.isInteger(step) ? v : v.toFixed(1))); };
+  const inc = () => { const v = Math.min(max, num + step); onChange(String(Number.isInteger(step) ? v : v.toFixed(1))); };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      <TouchableOpacity onPress={dec}
+        style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.textSecondary }}>−</Text>
+      </TouchableOpacity>
+      <View style={{ minWidth: 44, height: 28, borderRadius: 6, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.accent + '44', paddingHorizontal: 6 }}>
+        <Text style={{ fontSize: 14, fontWeight: '800', color: C.accentBright }}>{value || '0'}</Text>
+      </View>
+      <TouchableOpacity onPress={inc}
+        style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.textSecondary }}>+</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function FieldRow({ label, value, onChangeText, unit, step = 1, min = 0, max = 999 }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
       <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>{label}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          keyboardType="numeric"
-          style={{
-            backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
-            color: C.accentBright, fontSize: 14, fontWeight: '800', width, textAlign: 'center',
-            borderWidth: 1, borderColor: C.accent + '44',
-          }}
-        />
+        <StepperBox value={value} onChange={onChangeText} step={step} min={min} max={max} />
         {unit ? <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>{unit}</Text> : null}
       </View>
     </View>
   );
 }
 
-function DoubleFieldRow({ label, value1, onChangeText1, value2, onChangeText2, unit }) {
+function DoubleFieldRow({ label, value1, onChangeText1, value2, onChangeText2, unit, step = 1, min = 0, max = 999 }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
       <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>{label}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <TextInput value={value1} onChangeText={onChangeText1} keyboardType="numeric"
-          style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 50, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
-        <TextInput value={value2} onChangeText={onChangeText2} keyboardType="numeric"
-          style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 50, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+        <StepperBox value={value1} onChange={onChangeText1} step={step} min={min} max={max} />
+        <StepperBox value={value2} onChange={onChangeText2} step={step} min={min} max={max} />
         {unit ? <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>{unit}</Text> : null}
       </View>
     </View>
@@ -102,13 +143,42 @@ function Card({ children, style }) {
   );
 }
 
-function BigButton({ label, onPress, active }) {
+function SaveButton({ onPress, loading }) {
+  return (
+    <TouchableOpacity onPress={onPress} disabled={loading} activeOpacity={0.8}
+      style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
+      {loading
+        ? <ActivityIndicator color={C.white} />
+        : <Text style={{ fontSize: 15, fontWeight: '900', color: C.white }}>Sauvegarder</Text>}
+    </TouchableOpacity>
+  );
+}
+
+function MsgField({ value, onChangeText }) {
+  return (
+    <Card>
+      <SectionLabel text="Message" />
+      <TextInput
+        value={value} onChangeText={onChangeText}
+        placeholder="Écrire votre message"
+        placeholderTextColor={C.textMuted}
+        multiline
+        style={{
+          backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
+          color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
+          borderWidth: 1, borderColor: C.border,
+        }}
+      />
+    </Card>
+  );
+}
+
+function BigButton({ label, onPress }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8}
       style={{
-        backgroundColor: active ? C.accent : C.bgCard,
-        borderRadius: 14, paddingVertical: 16, alignItems: 'center',
-        borderWidth: 2, borderColor: active ? C.accentBright : C.border,
+        backgroundColor: C.bgCard, borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+        borderWidth: 2, borderColor: C.border,
       }}>
       <Text style={{ fontSize: 16, fontWeight: '900', color: C.white }}>{label}</Text>
     </TouchableOpacity>
@@ -131,11 +201,9 @@ function CategoryButton({ label, onPress }) {
 // ── Écran GYROSCOPE (Notifications) ──────────────────────────
 
 function GyroscopeNotifScreen({ onBack }) {
-  const [rotG, setRotG] = useState('');
-  const [rotD, setRotD] = useState('');
-  const [rotA, setRotA] = useState('');
-  const [son,  setSon]  = useState(true);
-  const [msg,  setMsg]  = useState('');
+  const { values: s, set, save, saving } = useSettings('notif_gyroscope', {
+    rotG: '', rotD: '', rotA: '', son: true, msg: '',
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -143,29 +211,17 @@ function GyroscopeNotifScreen({ onBack }) {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
         <Card>
           <SectionLabel text="Seuils" />
-          <FieldRow label="Rotation Gauche" value={rotG} onChangeText={setRotG} unit="XX °" />
-          <FieldRow label="Rotation Droite" value={rotD} onChangeText={setRotD} unit="XX °" />
-          <FieldRow label="Rotation Avant" value={rotA} onChangeText={setRotA} unit="XX °" />
+          <FieldRow label="Rotation Gauche" value={s.rotG} onChangeText={v => set('rotG', v)} unit="°" />
+          <FieldRow label="Rotation Droite" value={s.rotD} onChangeText={v => set('rotD', v)} unit="°" />
+          <FieldRow label="Rotation Avant"  value={s.rotA} onChangeText={v => set('rotA', v)} unit="°" />
         </Card>
 
         <Card>
-          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+          <ToggleRow label="Son Alarme" value={s.son} onValueChange={v => set('son', v)} />
         </Card>
 
-        <Card>
-          <SectionLabel text="Message" />
-          <TextInput
-            value={msg} onChangeText={setMsg}
-            placeholder="Écrire votre message"
-            placeholderTextColor={C.textMuted}
-            multiline
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
-              borderWidth: 1, borderColor: C.border,
-            }}
-          />
-        </Card>
+        <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
+        <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
   );
@@ -174,13 +230,9 @@ function GyroscopeNotifScreen({ onBack }) {
 // ── Écran TPMS (Notifications) ───────────────────────────────
 
 function TpmsNotifScreen({ onBack }) {
-  const [moyen,    setMoyen]    = useState('');
-  const [critique, setCritique] = useState('');
-  const [type,     setType]     = useState('');
-  const [alarme,   setAlarme]   = useState(true);
-  const [plein,    setPlein]    = useState(false);
-  const [son,      setSon]      = useState(true);
-  const [msg,      setMsg]      = useState('');
+  const { values: s, set, save, saving } = useSettings('notif_tpms', {
+    moyen: '', critique: '', type: '', alarme: true, plein: false, son: true, msg: '',
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -188,31 +240,19 @@ function TpmsNotifScreen({ onBack }) {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
         <Card>
           <SectionLabel text="Seuils" />
-          <FieldRow label="Moyen" value={moyen} onChangeText={setMoyen} unit="XX Bar" />
-          <FieldRow label="Critique" value={critique} onChangeText={setCritique} unit="XX Bar" />
-          <FieldRow label="Type" value={type} onChangeText={setType} />
+          <FieldRow label="Moyen"    value={s.moyen}    onChangeText={v => set('moyen', v)}    unit="Bar" />
+          <FieldRow label="Critique" value={s.critique} onChangeText={v => set('critique', v)} unit="Bar" />
+          <FieldRow label="Type"     value={s.type}     onChangeText={v => set('type', v)} />
         </Card>
 
         <Card>
-          <ToggleRow label="Alarme" value={alarme} onValueChange={setAlarme} />
-          <ToggleRow label="Plein ecran" value={plein} onValueChange={setPlein} />
-          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+          <ToggleRow label="Alarme"      value={s.alarme} onValueChange={v => set('alarme', v)} />
+          <ToggleRow label="Plein ecran" value={s.plein}  onValueChange={v => set('plein', v)} />
+          <ToggleRow label="Son Alarme"  value={s.son}    onValueChange={v => set('son', v)} />
         </Card>
 
-        <Card>
-          <SectionLabel text="Message" />
-          <TextInput
-            value={msg} onChangeText={setMsg}
-            placeholder="Écrire votre message"
-            placeholderTextColor={C.textMuted}
-            multiline
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
-              borderWidth: 1, borderColor: C.border,
-            }}
-          />
-        </Card>
+        <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
+        <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
   );
@@ -221,44 +261,32 @@ function TpmsNotifScreen({ onBack }) {
 // ── Écran BATTERIE (Notifications) ───────────────────────────
 
 function BatterieNotifScreen({ onBack }) {
-  const [son,     setSon]     = useState(true);
-  const [msg,     setMsg]     = useState('');
-  const [alm1,    setAlm1]    = useState('');
-  const [alm2,    setAlm2]    = useState('');
+  const { values: s, set, save, saving } = useSettings('notif_batterie', {
+    son: true, msg: '', alm1: '', alm2: '',
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <Header title="BATTERIE" subtitle="Notifications" onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
         <Card>
-          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+          <ToggleRow label="Son Alarme" value={s.son} onValueChange={v => set('son', v)} />
         </Card>
 
-        <Card>
-          <SectionLabel text="Message" />
-          <TextInput
-            value={msg} onChangeText={setMsg}
-            placeholder="Écrire votre message"
-            placeholderTextColor={C.textMuted}
-            multiline
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
-              borderWidth: 1, borderColor: C.border,
-            }}
-          />
-        </Card>
+        <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
 
         <Card>
           <SectionLabel text="Reglage" />
-          <DoubleFieldRow label="Alarme" value1={alm1} onChangeText1={setAlm1} value2={alm2} onChangeText2={setAlm2} unit="%" />
+          <DoubleFieldRow label="Alarme" value1={s.alm1} onChangeText1={v => set('alm1', v)} value2={s.alm2} onChangeText2={v => set('alm2', v)} unit="%" />
         </Card>
 
         <Card style={{ backgroundColor: C.bgElevated }}>
           <Text style={{ fontSize: 11, color: C.textSecondary, lineHeight: 18 }}>
-            NB: Une notification d'alerte sera envoyée quand la charge totale des batteries du scooter atteint la valeur définie.
+            NB: Une notification d'alerte est envoyée lorsque la charge totale des batteries du scooter atteint la valeur définie.
           </Text>
         </Card>
+
+        <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
   );
@@ -267,31 +295,20 @@ function BatterieNotifScreen({ onBack }) {
 // ── Écran SABOTAGE (Notifications) ───────────────────────────
 
 function SabotageNotifScreen({ onBack }) {
-  const [son, setSon] = useState(true);
-  const [msg, setMsg] = useState('');
+  const { values: s, set, save, saving } = useSettings('notif_sabotage', {
+    son: true, msg: '',
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <Header title="SABOTAGE" subtitle="Notifications" onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
         <Card>
-          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+          <ToggleRow label="Son Alarme" value={s.son} onValueChange={v => set('son', v)} />
         </Card>
 
-        <Card>
-          <SectionLabel text="Message" />
-          <TextInput
-            value={msg} onChangeText={setMsg}
-            placeholder="Écrire votre message"
-            placeholderTextColor={C.textMuted}
-            multiline
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
-              borderWidth: 1, borderColor: C.border,
-            }}
-          />
-        </Card>
+        <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
+        <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
   );
@@ -300,36 +317,23 @@ function SabotageNotifScreen({ onBack }) {
 // ── Écran ALARME ON (Notifications) ──────────────────────────
 
 function AlarmeOnNotifScreen({ onBack }) {
-  const [son,   setSon]   = useState(true);
-  const [msg,   setMsg]   = useState('');
-  const [delai, setDelai] = useState('');
+  const { values: s, set, save, saving } = useSettings('notif_alarmeOn', {
+    son: true, msg: '', delai: '',
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <Header title="ALARME ON" subtitle="Notifications" onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
         <Card>
-          <ToggleRow label="Son Alarme" value={son} onValueChange={setSon} />
+          <ToggleRow label="Son Alarme" value={s.son} onValueChange={v => set('son', v)} />
         </Card>
 
-        <Card>
-          <SectionLabel text="Message" />
-          <TextInput
-            value={msg} onChangeText={setMsg}
-            placeholder="Écrire votre message"
-            placeholderTextColor={C.textMuted}
-            multiline
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 14, minHeight: 80, textAlignVertical: 'top',
-              borderWidth: 1, borderColor: C.border,
-            }}
-          />
-        </Card>
+        <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
 
         <Card>
           <SectionLabel text="Reglage" />
-          <FieldRow label="Delai" value={delai} onChangeText={setDelai} unit="S" />
+          <FieldRow label="Delai" value={s.delai} onChangeText={v => set('delai', v)} unit="S" />
         </Card>
 
         <Card style={{ backgroundColor: C.bgElevated }}>
@@ -337,17 +341,19 @@ function AlarmeOnNotifScreen({ onBack }) {
             NB: Ce délai est la durée d'attente avant envoi d'une notification après avoir laissé le scooter sans activer l'alarme.
           </Text>
         </Card>
+
+        <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
   );
 }
 
-// ── Écran ENVOI LED (Notifications → Reglage Fn.) ───────────
+// ── Écran ENVOI LED (Reglage Fn.) ────────────────────────────
 
 function EnvoiLedScreen({ onBack }) {
-  const [type,    setType]    = useState('Continue');
-  const [duree,   setDuree]   = useState('');
-  const [rythme,  setRythme]  = useState('');
+  const { values: s, set, save, saving } = useSettings('notif_envoiLed', {
+    type: 'Continue', duree: '', rythme: '',
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -356,25 +362,27 @@ function EnvoiLedScreen({ onBack }) {
         <Card>
           <SectionLabel text="Type" />
           {['Continue', 'Clignotant'].map(t => (
-            <TouchableOpacity key={t} onPress={() => setType(t)}
+            <TouchableOpacity key={t} onPress={() => set('type', t)}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }}>
               <View style={{
                 width: 20, height: 20, borderRadius: 10, borderWidth: 2,
-                borderColor: type === t ? C.accentBright : C.textMuted,
+                borderColor: s.type === t ? C.accentBright : C.textMuted,
                 justifyContent: 'center', alignItems: 'center',
               }}>
-                {type === t && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.accentBright }} />}
+                {s.type === t && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.accentBright }} />}
               </View>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: type === t ? C.white : C.textSecondary }}>{t}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: s.type === t ? C.white : C.textSecondary }}>{t}</Text>
             </TouchableOpacity>
           ))}
         </Card>
 
         <Card>
           <SectionLabel text="Reglage" />
-          <FieldRow label="Durée" value={duree} onChangeText={setDuree} unit="S" />
-          <FieldRow label="Rythme" value={rythme} onChangeText={setRythme} unit="XX s" />
+          <FieldRow label="Durée"  value={s.duree}  onChangeText={v => set('duree', v)}  unit="S" />
+          <FieldRow label="Rythme" value={s.rythme} onChangeText={v => set('rythme', v)} unit="s" />
         </Card>
+
+        <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
   );
@@ -383,15 +391,10 @@ function EnvoiLedScreen({ onBack }) {
 // ── Écran INTERFACE > BATTERIE ───────────────────────────────
 
 function InterfaceBatterieScreen({ onBack }) {
-  const [jauneMin, setJauneMin] = useState('');
-  const [jauneMax, setJauneMax] = useState('');
-  const [rougeMin, setRougeMin] = useState('');
-  const [rougeMax, setRougeMax] = useState('');
-  const [vertVal,  setVertVal]  = useState('');
-  const [alerteV1, setAlerteV1] = useState('');
-  const [alerteV2, setAlerteV2] = useState('');
-  const [alerteV3, setAlerteV3] = useState('');
-  const [blueVal,  setBlueVal]  = useState('');
+  const { values: s, set, save, saving } = useSettings('interface_batterie', {
+    jauneMin: '', jauneMax: '', rougeMin: '', rougeMax: '', vertVal: '',
+    alerteV1: '', alerteV2: '', alerteV3: '', blueVal: '',
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -399,9 +402,9 @@ function InterfaceBatterieScreen({ onBack }) {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
         <Card>
           <SectionLabel text="Couleur Des Icons" />
-          <DoubleFieldRow label="Jaune" value1={jauneMin} onChangeText1={setJauneMin} value2={jauneMax} onChangeText2={setJauneMax} unit="%" />
-          <DoubleFieldRow label="Rouge" value1={rougeMin} onChangeText1={setRougeMin} value2={rougeMax} onChangeText2={setRougeMax} unit="%" />
-          <FieldRow label="Vert" value={vertVal} onChangeText={setVertVal} unit="%" />
+          <DoubleFieldRow label="Jaune" value1={s.jauneMin} onChangeText1={v => set('jauneMin', v)} value2={s.jauneMax} onChangeText2={v => set('jauneMax', v)} unit="%" />
+          <DoubleFieldRow label="Rouge" value1={s.rougeMin} onChangeText1={v => set('rougeMin', v)} value2={s.rougeMax} onChangeText2={v => set('rougeMax', v)} unit="%" />
+          <FieldRow label="Vert" value={s.vertVal} onChangeText={v => set('vertVal', v)} unit="%" />
         </Card>
 
         <Card>
@@ -412,13 +415,10 @@ function InterfaceBatterieScreen({ onBack }) {
               <View style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: C.danger }} />
               <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>Alerte</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <TextInput value={alerteV1} onChangeText={setAlerteV1} keyboardType="numeric"
-                style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 45, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
-              <TextInput value={alerteV2} onChangeText={setAlerteV2} keyboardType="numeric"
-                style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 45, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
-              <TextInput value={alerteV3} onChangeText={setAlerteV3} keyboardType="numeric"
-                style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 45, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <StepperBox value={s.alerteV1} onChange={v => set('alerteV1', v)} max={100} />
+              <StepperBox value={s.alerteV2} onChange={v => set('alerteV2', v)} max={100} />
+              <StepperBox value={s.alerteV3} onChange={v => set('alerteV3', v)} max={100} />
               <Text style={{ fontSize: 11, color: C.textMuted }}>%</Text>
             </View>
           </View>
@@ -429,12 +429,13 @@ function InterfaceBatterieScreen({ onBack }) {
               <Text style={{ fontSize: 13, color: C.textSecondary, fontWeight: '600' }}>Blue</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <TextInput value={blueVal} onChangeText={setBlueVal} keyboardType="numeric"
-                style={{ backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, color: C.accentBright, fontSize: 14, fontWeight: '800', width: 50, textAlign: 'center', borderWidth: 1, borderColor: C.accent + '44' }} />
+              <StepperBox value={s.blueVal} onChange={v => set('blueVal', v)} max={100} />
               <Text style={{ fontSize: 11, color: C.textMuted }}>%</Text>
             </View>
           </View>
         </Card>
+
+        <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
   );
@@ -454,19 +455,16 @@ const NOTIF_CATEGORIES = [
 // ── Écran principal Parametres ───────────────────────────────
 
 export default function ParametresScreen({ navigation }) {
-  // Navigation interne par état
-  const [screen, setScreen] = useState('main'); // main | notifList | gyroscope | tpms | batterie | sabotage | alarmeOn | envoiLed | interfaceBatt
+  const [screen, setScreen] = useState('main');
 
-  // ── Sous-écrans ──
-  if (screen === 'gyroscope')    return <GyroscopeNotifScreen onBack={() => setScreen('notifList')} />;
-  if (screen === 'tpms')         return <TpmsNotifScreen      onBack={() => setScreen('notifList')} />;
-  if (screen === 'batterie')     return <BatterieNotifScreen   onBack={() => setScreen('notifList')} />;
-  if (screen === 'sabotage')     return <SabotageNotifScreen   onBack={() => setScreen('notifList')} />;
-  if (screen === 'alarmeOn')     return <AlarmeOnNotifScreen   onBack={() => setScreen('notifList')} />;
-  if (screen === 'envoiLed')     return <EnvoiLedScreen        onBack={() => setScreen('notifList')} />;
+  if (screen === 'gyroscope')     return <GyroscopeNotifScreen    onBack={() => setScreen('notifList')} />;
+  if (screen === 'tpms')          return <TpmsNotifScreen         onBack={() => setScreen('notifList')} />;
+  if (screen === 'batterie')      return <BatterieNotifScreen     onBack={() => setScreen('notifList')} />;
+  if (screen === 'sabotage')      return <SabotageNotifScreen     onBack={() => setScreen('notifList')} />;
+  if (screen === 'alarmeOn')      return <AlarmeOnNotifScreen     onBack={() => setScreen('notifList')} />;
+  if (screen === 'envoiLed')      return <EnvoiLedScreen          onBack={() => setScreen('notifList')} />;
   if (screen === 'interfaceBatt') return <InterfaceBatterieScreen onBack={() => setScreen('interfaceMenu')} />;
 
-  // ── Interface menu ──
   if (screen === 'interfaceMenu') {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -478,7 +476,6 @@ export default function ParametresScreen({ navigation }) {
     );
   }
 
-  // ── Notifications list ──
   if (screen === 'notifList') {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -492,12 +489,10 @@ export default function ParametresScreen({ navigation }) {
     );
   }
 
-  // ── Main screen : Interface / Notifications ──
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <Header title="PARAMETRES" onBack={() => navigation.goBack()} />
-
       <View style={{ padding: 20, gap: 14 }}>
         <BigButton label="Interface" onPress={() => setScreen('interfaceMenu')} />
         <BigButton label="Notifications" onPress={() => setScreen('notifList')} />
