@@ -9,6 +9,7 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import ParametresScreen    from '../screens/ParametresScreen';
 import BatteryStockScreen  from '../screens/BatteryStockScreen';
 import TpmsStockScreen     from '../screens/TpmsStockScreen';
+import AdminScreen         from '../screens/AdminScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -29,6 +30,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Parametres"    component={ParametresScreen} />
         <Stack.Screen name="BatteryStock"  component={BatteryStockScreen} />
         <Stack.Screen name="TpmsStock"     component={TpmsStockScreen} />
+        <Stack.Screen name="Admin"         component={AdminScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

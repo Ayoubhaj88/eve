@@ -408,6 +408,7 @@ export default function HomeScreen({ navigation }) {
     else if (key === 'compte')     setShowLogout(true);
     else if (key === 'addBatterie') navigation.navigate('BatteryStock');
     else if (key === 'addTpms')     navigation.navigate('TpmsStock');
+    else if (key === 'admin')       navigation.navigate('Admin');
   };
 
   // Filtrage par recherche
