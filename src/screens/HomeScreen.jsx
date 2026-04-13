@@ -383,16 +383,24 @@ export default function HomeScreen({ navigation }) {
       }
     };
 
-    
+
     mqttClient.on('message', onMessage);
+
+    // Dans le useEffect, après mqttClient.on('message', onMessage) :
+mqttClient.subscribe('scooter/+/telemetry', { qos: 0 }, (err) => {
+  if (err) console.log('❌ Subscribe HomeScreen error:', err.message);
+  else console.log('✅ Subscribed: scooter/+/telemetry');
+});
 
     // 3. Filet de sécurité Supabase (On passe à 1 minute au lieu de 500ms !)
     const heartbeat = setInterval(fetchScooters, 60000);
 
     return () => {
-      clearInterval(heartbeat);
-      mqttClient.unsubscribe(globalTopic);
-      mqttClient.removeListener('message', onMessage);
+      return () => {
+          clearInterval(heartbeat);
+          mqttClient.unsubscribe('scooter/+/telemetry');
+          mqttClient.removeListener('message', onMessage);
+};
     };
   }, []);
 

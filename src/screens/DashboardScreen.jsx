@@ -456,6 +456,12 @@ export default function DashboardScreen({ route, navigation }) {
     };
     mqttClient.on('message', onMqttMessage);
 
+    // Dans le useEffect, après mqttClient.on('message', onMqttMessage) :
+mqttClient.subscribe(telemetryTopic, { qos: 0 }, (err) => {
+  if (err) console.log('❌ Subscribe Dashboard error:', err.message);
+  else console.log('✅ Subscribed:', telemetryTopic);
+});
+
     // 3. SUPABASE REALTIME (Pour batteries et TPMS)
     const battCh = supabase.channel('batt-' + scooter.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, fetchBatteries)
@@ -468,12 +474,12 @@ export default function DashboardScreen({ route, navigation }) {
     const interval = setInterval(fetchAll, 30000);
 
     return () => {
-      clearInterval(interval);
-      mqttClient.unsubscribe(telemetryTopic);
-      mqttClient.removeListener('message', onMqttMessage);
-      supabase.removeChannel(battCh);
-      supabase.removeChannel(tpmsCh);
-    };
+  clearInterval(interval);
+  mqttClient.unsubscribe(telemetryTopic);
+  mqttClient.removeListener('message', onMqttMessage);
+  supabase.removeChannel(battCh);
+  supabase.removeChannel(tpmsCh);
+};
   }, [scooter?.id]);
 
   if (!scooter) return (

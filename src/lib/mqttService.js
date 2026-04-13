@@ -54,6 +54,8 @@ mqttClient.on('error', (err) => {
 });
 
 // 🔥 DEBUG GLOBAL (très important pour toi)
-mqttClient.on('message', (topic, message) => {
-  console.log('📩 MQTT RAW:', topic, message.toString());
-});
+if (__DEV__) {
+  mqttClient.on('message', (topic, message) => {
+    console.log('📩 MQTT RAW:', topic, message.toString());
+  });
+}
