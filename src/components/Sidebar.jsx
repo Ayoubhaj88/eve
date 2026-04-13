@@ -8,8 +8,8 @@ import { C } from '../constants';
 
 const ITEMS_BASE = [
   { key: 'parametres',      icon: '🔔',  label: 'Parametres des notifications' },
-  { key: 'addBatterie',     icon: '🔋',  label: 'Ajouter Batterie' },
-  { key: 'addTpms',         icon: '🛞',  label: 'Ajouter TPMS'    },
+  { key: 'addBatterie',     icon: '🔋',  label: 'Batterie' },
+  { key: 'addTpms',         icon: '🛞',  label: 'TPMS'    },
   { key: 'addScooter',      icon: '🛵',  label: 'Ajouter Scooter' },
 ];
 

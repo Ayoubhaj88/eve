@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,Image,
+  View, Text, FlatList, TouchableOpacity, Image,
   StatusBar, Platform, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
 import { C, STATUS, battColor, timeAgo, alertOk } from '../constants';
 import Sidebar from '../components/Sidebar';
+import { mqttClient } from '../lib/mqttService';
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ function wheelColor(v, threshold = 2.0) {
   return C.success;
 }
 
-// ── Indicator cell (cellule colorée) ─────────────────────
+// ── Indicator cell ────────────────────────────────────────
 
 function IndicCell({ children, alertColor }) {
   const bg = alertColor === C.danger
@@ -34,8 +35,7 @@ function IndicCell({ children, alertColor }) {
       flex: 1, backgroundColor: bg, borderRadius: 10,
       paddingVertical: 8, paddingHorizontal: 4,
       alignItems: 'center', gap: 4,
-      borderWidth: 1.5,
-      borderColor: borderCol,
+      borderWidth: 1.5, borderColor: borderCol,
     }}>
       {children}
     </View>
@@ -54,7 +54,7 @@ function CellLabel({ text }) {
   );
 }
 
-// ── Battery dashes ───────────────────────────────────────
+// ── Battery dashes ────────────────────────────────────────
 
 function BatteryDashes({ batteries }) {
   const slots = [null, null, null];
@@ -76,7 +76,7 @@ function BatteryDashes({ batteries }) {
   );
 }
 
-// ── Scooter card (5 cellules comme Figma) ────────────────
+// ── Scooter card ──────────────────────────────────────────
 
 function ScooterCard({ item, onPress }) {
   const sc        = STATUS[item.status] ?? STATUS.offline;
@@ -95,7 +95,6 @@ function ScooterCard({ item, onPress }) {
         borderColor: anyTamper || item.fallen ? C.danger + '55' : C.border,
       }}
     >
-      {/* Header : nom + badge status */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <Text style={{ fontSize: 15, fontWeight: '800', color: C.white }}>{item.name}</Text>
         <View style={{
@@ -111,26 +110,15 @@ function ScooterCard({ item, onPress }) {
         </View>
       </View>
 
-      {/* 5 cellules indicateurs */}
       <View style={{ flexDirection: 'row', gap: 5 }}>
-        {/* BATT */}
         <IndicCell>
-          <Image
-            source={require('../../assets/battr.png')}
-            style={{ width: 40, height: 40, tintColor: '#000000' }}
-            resizeMode="contain"
-          />
+          <Image source={require('../../assets/battr.png')} style={{ width: 40, height: 40, tintColor: '#000000' }} resizeMode="contain" />
           <BatteryDashes batteries={batteries} />
           <CellLabel text="Batt." />
         </IndicCell>
 
-        {/* SABOTAGE */}
         <IndicCell alertColor={anyTamper ? C.danger : C.success}>
-          <Image
-            source={require('../../assets/sabotage.png')}
-            style={{ width: 30, height: 30, tintColor: '#000000' }}
-            resizeMode="contain"
-          />
+          <Image source={require('../../assets/sabotage.png')} style={{ width: 30, height: 30, tintColor: '#000000' }} resizeMode="contain" />
           <View style={{ flexDirection: 'row', gap: 3 }}>
             {tamper.slice(0, 3).map((active, i) => (
               <Dot key={i} color={active ? C.danger : C.success} />
@@ -139,29 +127,18 @@ function ScooterCard({ item, onPress }) {
           <CellLabel text="Sabotage" />
         </IndicCell>
 
-        {/* ALARME */}
         <IndicCell alertColor={item.alarm ? C.success : C.danger}>
-          <Image
-            source={require('../../assets/alarme.png')}
-            style={{ width: 30, height: 30, tintColor: '#000000' }}
-            resizeMode="contain"
-          />
+          <Image source={require('../../assets/alarme.png')} style={{ width: 30, height: 30, tintColor: '#000000' }} resizeMode="contain" />
           <Dot color={item.alarm ? C.success : C.danger} />
           <CellLabel text="Alarme" />
         </IndicCell>
 
-        {/* CHUTE */}
         <IndicCell alertColor={item.fallen ? C.danger : C.success}>
-          <Image
-            source={require('../../assets/gyro.png')}
-            style={{ width: 30, height: 30, tintColor: '#000000' }}
-            resizeMode="contain"
-          />
+          <Image source={require('../../assets/gyro.png')} style={{ width: 30, height: 30, tintColor: '#000000' }} resizeMode="contain" />
           <Dot color={item.fallen ? C.danger : C.success} />
           <CellLabel text="Chute" />
         </IndicCell>
 
-        {/* ROUES */}
         <IndicCell alertColor={
           wheelColor(item.wheel_front, tpmsThresh) === C.danger || wheelColor(item.wheel_rear, tpmsThresh) === C.danger
             ? C.danger
@@ -169,11 +146,7 @@ function ScooterCard({ item, onPress }) {
               ? C.warning
               : (item.wheel_front != null || item.wheel_rear != null) ? C.success : null
         }>
-          <Image
-            source={require('../../assets/tpms.png')}
-            style={{ width: 30, height: 30, tintColor: '#000000' }}
-            resizeMode="contain"
-          />
+          <Image source={require('../../assets/tpms.png')} style={{ width: 30, height: 30, tintColor: '#000000' }} resizeMode="contain" />
           <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
             <View style={{ alignItems: 'center', gap: 1 }}>
               <Dot color={wheelColor(item.wheel_front, tpmsThresh)} />
@@ -191,7 +164,7 @@ function ScooterCard({ item, onPress }) {
   );
 }
 
-// ── Modal ajouter scooter ────────────────────────────────
+// ── Modal ajouter scooter ─────────────────────────────────
 
 function AddScooterModal({ visible, onClose, onSaved, initial }) {
   const isEdit = !!initial;
@@ -247,16 +220,12 @@ function AddScooterModal({ visible, onClose, onSaved, initial }) {
             N° Serie/ Cadre
           </Text>
           <TextInput
-            value={name}
-            onChangeText={t => setName(t.slice(0, 17))}
-            placeholder="Scooter X"
-            placeholderTextColor="rgba(255,255,255,0.4)"
+            value={name} onChangeText={t => setName(t.slice(0, 17))}
+            placeholder="Scooter X" placeholderTextColor="rgba(255,255,255,0.4)"
             maxLength={17}
             style={{
-              backgroundColor: 'rgba(255,255,255,0.15)',
-              borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 15,
-              borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+              backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
             }}
           />
           <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginBottom: 12, marginTop: 4, textAlign: 'right' }}>
@@ -270,10 +239,8 @@ function AddScooterModal({ visible, onClose, onSaved, initial }) {
             value={model} onChangeText={setModel}
             placeholder="ex: Niu NQi GT Pro" placeholderTextColor="rgba(255,255,255,0.4)"
             style={{
-              backgroundColor: 'rgba(255,255,255,0.15)',
-              borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 15,
-              borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+              backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14,
+              color: C.white, fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
               marginBottom: 20,
             }}
           />
@@ -290,7 +257,7 @@ function AddScooterModal({ visible, onClose, onSaved, initial }) {
   );
 }
 
-// ── Modal deconnexion ────────────────────────────────────
+// ── Modal deconnexion ─────────────────────────────────────
 
 function LogoutModal({ visible, onClose, onConfirm, loading }) {
   return (
@@ -323,7 +290,7 @@ function LogoutModal({ visible, onClose, onConfirm, loading }) {
   );
 }
 
-// ── Ecran principal ──────────────────────────────────────
+// ── Ecran principal ───────────────────────────────────────
 
 export default function HomeScreen({ navigation }) {
   const [scooters,       setScooters]       = useState([]);
@@ -336,63 +303,97 @@ export default function HomeScreen({ navigation }) {
   const [showSidebar,    setShowSidebar]    = useState(false);
   const [searchText,     setSearchText]     = useState('');
 
+  // Ref pour éviter les appels simultanés
+  const fetchingRef = useRef(false);
+
   const fetchScooters = async () => {
-    const { data: scooterData, error } = await supabase
-      .from('scooters')
-      .select('*, batteries(id, serial_number, slot, soc)');
-    if (error) { console.error('Supabase:', error); setLoading(false); return; }
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      // 1. On récupère les scooters et leurs batteries
+      const { data: scooterData, error } = await supabase
+        .from('scooters')
+        .select('*, batteries(id, serial_number, slot, soc)');
+      
+      if (error) throw error;
 
-    const ids = (scooterData ?? []).map(s => s.id);
-    let telMap = {};
-    if (ids.length > 0) {
-      const results = await Promise.all(
-        ids.map(id =>
-          supabase.from('telemetry').select('*')
-            .eq('scooter_id', id)
-            .order('recorded_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-        )
-      );
-      results.forEach((res, i) => {
-        if (res.data) telMap[ids[i]] = res.data;
-      });
+      // 2. On récupère la dernière télémétrie pour CHAQUE scooter (pour le switch/tamper)
+      const enriched = await Promise.all((scooterData || []).map(async (s) => {
+        const { data: t } = await supabase
+          .from('telemetry')
+          .select('tamper_points, alarm, fallen, status, recorded_at')
+          .eq('scooter_id', s.id)
+          .order('recorded_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        return {
+          ...s,
+          // On injecte les tamper_points (interrupteurs) ici
+          tamper_points: t?.tamper_points ?? [false, false, false],
+          alarm: t?.alarm ?? false,
+          fallen: t?.fallen ?? false,
+          status: t?.status ?? 'offline',
+          last_update: t?.recorded_at,
+          _batteries: s.batteries || []
+        };
+      }));
+
+      setScooters(enriched);
+    } catch (e) {
+      console.error('Erreur Fetch HomeScreen:', e.message);
+    } finally {
+      fetchingRef.current = false;
+      setLoading(false);
     }
-
-    setScooters((scooterData ?? []).map(s => {
-      const t = telMap[s.id];
-      return {
-        ...s,
-        ...(t ? {
-          tamper_points: t.tamper_points,
-          alarm: t.alarm,
-          fallen: t.fallen,
-          wheel_front: t.wheel_front,
-          wheel_rear: t.wheel_rear,
-          status: t.status ?? s.status ?? 'offline',
-          last_update: t.recorded_at,
-        } : { status: s.status ?? 'offline' }),
-        _batteries: s.batteries ?? [],
-      };
-    }));
-    setLoading(false);
   };
 
+
   useEffect(() => {
+    // 1. Chargement initial des données stockées
     fetchScooters();
     supabase.auth.getUser().then(({ data }) => setUserEmail(data?.user?.email ?? ''));
 
-    const ch1 = supabase.channel('home-tel')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' }, () => fetchScooters())
-      .subscribe();
-    const ch2 = supabase.channel('home-batt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries' }, () => fetchScooters())
-      .subscribe();
-    const ch3 = supabase.channel('home-scoot')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'scooters' }, () => fetchScooters())
-      .subscribe();
+    // 2. ÉCOUTE MQTT (Réactivité en temps réel)
+    // On s'abonne à tous les scooters d'un coup
+    const globalTopic = 'scooter/+/telemetry';
+    
 
-    return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); supabase.removeChannel(ch3); };
+    const onMessage = (topic, message) => {
+      try {
+        const parts = topic.split('/');
+        const mqttScooterId = parts[1];
+        const liveData = JSON.parse(message.toString());
+
+        setScooters(current => current.map(s => 
+          s.id === mqttScooterId 
+            ? { 
+                ...s, 
+                // Mise à jour immédiate des 3 interrupteurs
+                tamper_points: liveData.tamper_points || s.tamper_points,
+                alarm: liveData.alarm !== undefined ? liveData.alarm : s.alarm,
+                fallen: liveData.fallen !== undefined ? liveData.fallen : s.fallen,
+                status: liveData.status || 'online',
+                last_update: new Date().toISOString() 
+              } 
+            : s
+        ));
+      } catch (e) {
+        console.log("Erreur Parsing MQTT HomeScreen:", e);
+      }
+    };
+
+    
+    mqttClient.on('message', onMessage);
+
+    // 3. Filet de sécurité Supabase (On passe à 1 minute au lieu de 500ms !)
+    const heartbeat = setInterval(fetchScooters, 60000);
+
+    return () => {
+      clearInterval(heartbeat);
+      mqttClient.unsubscribe(globalTopic);
+      mqttClient.removeListener('message', onMessage);
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -403,15 +404,14 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleSidebarSelect = (key) => {
-    if (key === 'addScooter')      { setEditingScooter(null); setShowForm(true); }
-    else if (key === 'parametres') navigation.navigate('Parametres');
-    else if (key === 'compte')     setShowLogout(true);
+    if (key === 'addScooter')       { setEditingScooter(null); setShowForm(true); }
+    else if (key === 'parametres')  navigation.navigate('Parametres');
+    else if (key === 'compte')      setShowLogout(true);
     else if (key === 'addBatterie') navigation.navigate('BatteryStock');
     else if (key === 'addTpms')     navigation.navigate('TpmsStock');
     else if (key === 'admin')       navigation.navigate('Admin');
   };
 
-  // Filtrage par recherche
   const filtered = searchText.trim()
     ? scooters.filter(s => s.name?.toLowerCase().includes(searchText.toLowerCase()))
     : scooters;
@@ -434,7 +434,6 @@ export default function HomeScreen({ navigation }) {
 
           ListHeaderComponent={() => (
             <View style={{ paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}>
-              {/* ── Top bar : ☰ EVE Mobility 🔔 ── */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <TouchableOpacity onPress={() => setShowSidebar(true)} activeOpacity={0.7}>
@@ -444,30 +443,24 @@ export default function HomeScreen({ navigation }) {
                     EVE <Text style={{ color: C.accentBright }}>Mobility</Text>
                   </Text>
                 </View>
-
                 <TouchableOpacity onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}
                   style={{ width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={{ fontSize: 20 }}>🔔</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* ── Barre de recherche ── */}
               <View style={{
                 flexDirection: 'row', alignItems: 'center',
                 backgroundColor: C.bgCard, borderRadius: 12,
                 borderWidth: 1, borderColor: C.border,
-                paddingHorizontal: 14, height: 44,
-                marginBottom: 18,
-                gap: 10,
+                paddingHorizontal: 14, height: 44, marginBottom: 18, gap: 10,
               }}>
                 <TouchableOpacity onPress={() => setShowSidebar(true)}>
                   <Text style={{ fontSize: 16, color: C.textMuted }}>☰</Text>
                 </TouchableOpacity>
                 <TextInput
-                  value={searchText}
-                  onChangeText={setSearchText}
-                  placeholder="Hinted search text"
-                  placeholderTextColor={C.textMuted}
+                  value={searchText} onChangeText={setSearchText}
+                  placeholder="Hinted search text" placeholderTextColor={C.textMuted}
                   style={{ flex: 1, color: C.white, fontSize: 14 }}
                 />
                 <Text style={{ fontSize: 16, color: C.textMuted }}>🔍</Text>

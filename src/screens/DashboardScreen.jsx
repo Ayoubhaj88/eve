@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { C, STATUS, battColor, timeAgo, alertOk } from '../constants';
 import {
@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
 import AttentionModal from '../components/AttentionModal';
+import { mqttClient } from '../lib/mqttService';
 
 const MAX_BATTERIES = 3;
 
@@ -38,7 +39,6 @@ function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots })
     if (!visible) return;
     setSelectedId(null);
     setSlot([1, 2, 3].find(s => !usedSlots.includes(s)) ?? 1);
-    // Charger batteries en stock (scooter_id IS NULL)
     setFetching(true);
     supabase.from('batteries').select('*')
       .is('scooter_id', null)
@@ -65,15 +65,13 @@ function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots })
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
         <View style={{
           backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24,
-          maxHeight: '75%',
+          padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24, maxHeight: '75%',
         }}>
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 20 }} />
           <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 16, textAlign: 'center' }}>
             Assigner une batterie
           </Text>
 
-          {/* Sélection slot */}
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
             {[1, 2, 3].map(s => {
               const taken  = usedSlots.includes(s);
@@ -94,7 +92,6 @@ function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots })
             })}
           </View>
 
-          {/* Liste batteries en stock */}
           <Text style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
             Batteries en stock ({stockBatteries.length})
           </Text>
@@ -118,16 +115,13 @@ function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots })
                       flexDirection: 'row', alignItems: 'center', gap: 12,
                       backgroundColor: selected ? C.accent + '22' : C.bgElevated,
                       borderRadius: 12, padding: 12, marginBottom: 6,
-                      borderWidth: 2,
-                      borderColor: selected ? C.accent : C.border,
+                      borderWidth: 2, borderColor: selected ? C.accent : C.border,
                     }}>
                     <Text style={{ fontSize: 22 }}>🔋</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>{b.serial_number}</Text>
                       {b.soc != null && (
-                        <Text style={{ fontSize: 10, color: C.textMuted }}>
-                          SOC: {b.soc}%
-                        </Text>
+                        <Text style={{ fontSize: 10, color: C.textMuted }}>SOC: {b.soc}%</Text>
                       )}
                     </View>
                     {selected && (
@@ -141,7 +135,6 @@ function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots })
             </ScrollView>
           )}
 
-          {/* Bouton assigner */}
           <TouchableOpacity onPress={assign} disabled={loading || !selectedId} activeOpacity={0.8}
             style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', opacity: (loading || !selectedId) ? 0.5 : 1 }}>
             {loading
@@ -196,8 +189,7 @@ function TpmsPickerModal({ visible, onClose, onSaved, scooterId, wheel }) {
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
         <View style={{
           backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24,
-          maxHeight: '70%',
+          padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24, maxHeight: '70%',
         }}>
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 20 }} />
           <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 16, textAlign: 'center' }}>
@@ -227,8 +219,7 @@ function TpmsPickerModal({ visible, onClose, onSaved, scooterId, wheel }) {
                       flexDirection: 'row', alignItems: 'center', gap: 12,
                       backgroundColor: selected ? C.accent + '22' : C.bgElevated,
                       borderRadius: 12, padding: 12, marginBottom: 6,
-                      borderWidth: 2,
-                      borderColor: selected ? C.accent : C.border,
+                      borderWidth: 2, borderColor: selected ? C.accent : C.border,
                     }}>
                     <Text style={{ fontSize: 22 }}>⚙️</Text>
                     <View style={{ flex: 1 }}>
@@ -260,7 +251,7 @@ function TpmsPickerModal({ visible, onClose, onSaved, scooterId, wheel }) {
   );
 }
 
-// ── Battery card (style Figma) ──────────────────────────────
+// ── Battery card ────────────────────────────────────────────
 
 function BatteryCard({ item, onUnassign, onDelete }) {
   const soc       = item.soc;
@@ -271,8 +262,8 @@ function BatteryCard({ item, onUnassign, onDelete }) {
                     : soc != null && soc <= 20 ? 'Faible'
                     : 'Indisponible';
 
-  const statusColor = statusLabel === 'Stable'  ? C.success
-                    : statusLabel === 'Faible'  ? C.warning
+  const statusColor = statusLabel === 'Stable' ? C.success
+                    : statusLabel === 'Faible' ? C.warning
                     : C.textMuted;
 
   return (
@@ -281,11 +272,9 @@ function BatteryCard({ item, onUnassign, onDelete }) {
       borderWidth: 1, borderColor: C.border,
       padding: 14, marginBottom: 8,
     }}>
-      {/* Row 1 : Nom + Badge status + ⚙️ ✕ */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
         <Text style={{ flex: 1, fontSize: 15, fontWeight: '900', color: C.white }}>{slotLabel}</Text>
 
-        {/* Status badge */}
         <View style={{
           paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20,
           backgroundColor: statusColor === C.success ? C.success
@@ -297,7 +286,6 @@ function BatteryCard({ item, onUnassign, onDelete }) {
           <Text style={{ fontSize: 11, fontWeight: '800', color: C.white }}>{statusLabel}</Text>
         </View>
 
-        {/* Unassign (retour stock) */}
         <TouchableOpacity onPress={() => onUnassign(item)}
           style={{
             width: 32, height: 32, borderRadius: 8,
@@ -307,7 +295,6 @@ function BatteryCard({ item, onUnassign, onDelete }) {
           <Text style={{ fontSize: 16 }}>⚙️</Text>
         </TouchableOpacity>
 
-        {/* Delete */}
         <TouchableOpacity onPress={() => onDelete(item)}
           style={{
             width: 32, height: 32, borderRadius: 8,
@@ -318,14 +305,10 @@ function BatteryCard({ item, onUnassign, onDelete }) {
         </TouchableOpacity>
       </View>
 
-      {/* Row 2 : SOC% + Wifi + N° Serie : [valeur] */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Text style={{ fontSize: 32, fontWeight: '900', color, letterSpacing: -1 }}>
           {soc != null ? soc.toFixed(0) + '%' : 'NA'}
         </Text>
-
-
-        {/* N° Serie */}
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>N° Serie :</Text>
           <View style={{
@@ -346,45 +329,70 @@ function BatteryCard({ item, onUnassign, onDelete }) {
   );
 }
 
-// ── Dashboard screen ───────────────────────────────────────
+// ── Dashboard screen ────────────────────────────────────────
 
 export default function DashboardScreen({ route, navigation }) {
   const scooter = route.params?.scooter;
 
-  const [batteries,     setBatteries]     = useState([]);
-  const [battLoading,   setBattLoading]   = useState(true);
-  const [showBattForm,  setShowBattForm]  = useState(false);
-  const [showTpmsForm,  setShowTpmsForm]  = useState(false);
-  const [tpmsWheel,     setTpmsWheel]     = useState('AV');
-  const [tpmsSensors,   setTpmsSensors]   = useState([]);
-  const [telemetry,     setTelemetry]     = useState(null);
-  const [fallThreshold, setFallThreshold] = useState(scooter?.fall_threshold ?? 2.5);
-  const [attention,     setAttention]     = useState({ visible: false, label: '', action: null });
+  const [batteries,    setBatteries]    = useState([]);
+  const [battLoading,  setBattLoading]  = useState(true);
+  const [showBattForm, setShowBattForm] = useState(false);
+  const [showTpmsForm, setShowTpmsForm] = useState(false);
+  const [tpmsWheel,    setTpmsWheel]    = useState('AV');
+  const [tpmsSensors,  setTpmsSensors]  = useState([]);
+  const [telemetry,    setTelemetry]    = useState(null);
+  const [attention,    setAttention]    = useState({ visible: false, label: '', action: null });
 
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
+  // Refs pour éviter les appels simultanés
+  const fetchingBattRef = useRef(false);
+  const fetchingTelRef  = useRef(false);
+  const fetchingTpmsRef = useRef(false);
+
   const fetchBatteries = async () => {
-    if (!scooter?.id) return;
-    setBattLoading(true);
-    const { data, error } = await supabase.from('batteries').select('*')
-      .eq('scooter_id', scooter.id).order('slot', { ascending: true });
-    if (!error) setBatteries(data ?? []);
-    setBattLoading(false);
+    if (!scooter?.id || fetchingBattRef.current) return;
+    fetchingBattRef.current = true;
+    try {
+      const { data, error } = await supabase.from('batteries').select('*')
+        .eq('scooter_id', scooter.id).order('slot', { ascending: true });
+      if (!error) setBatteries(data ?? []);
+    } finally {
+      fetchingBattRef.current = false;
+      setBattLoading(false);
+    }
   };
 
   const fetchTelemetry = async () => {
-    if (!scooter?.id) return;
-    const { data } = await supabase.from('telemetry').select('*')
-      .eq('scooter_id', scooter.id).order('recorded_at', { ascending: false })
-      .limit(1).maybeSingle();
-    if (data) setTelemetry(data);
+    if (!scooter?.id || fetchingTelRef.current) return;
+    fetchingTelRef.current = true;
+    try {
+      const { data } = await supabase.from('telemetry').select('*')
+        .eq('scooter_id', scooter.id).order('recorded_at', { ascending: false })
+        .limit(1).maybeSingle();
+      if (data) setTelemetry(data);
+    } finally {
+      fetchingTelRef.current = false;
+    }
   };
 
   const fetchTpms = async () => {
-    if (!scooter?.id) return;
-    const { data } = await supabase.from('tpms_sensors').select('*')
-      .eq('scooter_id', scooter.id);
-    setTpmsSensors(data ?? []);
+    if (!scooter?.id || fetchingTpmsRef.current) return;
+    fetchingTpmsRef.current = true;
+    try {
+      const { data } = await supabase.from('tpms_sensors').select('*')
+        .eq('scooter_id', scooter.id);
+      setTpmsSensors(data ?? []);
+    } finally {
+      fetchingTpmsRef.current = false;
+    }
+  };
+
+  // Fetch toutes les données en parallèle
+  const fetchAll = () => {
+    fetchBatteries();
+    fetchTelemetry();
+    fetchTpms();
   };
 
   const tpmsFront = tpmsSensors.find(t => t.wheel_position === 'AV');
@@ -396,8 +404,7 @@ export default function DashboardScreen({ route, navigation }) {
       label: `Retirer "${item.serial_number}" et remettre en stock ?`,
       action: async () => {
         const { error } = await supabase.from('batteries')
-          .update({ scooter_id: null, slot: null })
-          .eq('id', item.id);
+          .update({ scooter_id: null, slot: null }).eq('id', item.id);
         if (error) alertOk('Erreur', error.message);
         else fetchBatteries();
       },
@@ -418,22 +425,55 @@ export default function DashboardScreen({ route, navigation }) {
 
   const showAtt = (label, action) => setAttention({ visible: true, label, action });
 
+  const deleteScooter = () => {
+    setAttention({
+      visible: true,
+      label: `Supprimer définitivement "${scooter.name}" ?\nCette action est irréversible.`,
+      action: async () => {
+        const { error } = await supabase.from('scooters').delete().eq('id', scooter.id);
+        if (error) { alertOk('Erreur', error.message); return; }
+        navigation.goBack();
+      },
+    });
+  };
+
   useEffect(() => {
     if (!scooter?.id) return;
-    fetchBatteries(); fetchTelemetry(); fetchTpms();
-    supabase.from('scooters').select('fall_threshold').eq('id', scooter.id).single()
-      .then(({ data }) => { if (data?.fall_threshold != null) setFallThreshold(data.fall_threshold); });
 
+    // 1. Chargement initial
+    fetchAll();
+
+    // 2. ÉCOUTE MQTT (Réactivité instantanée)
+    const telemetryTopic = `scooter/${scooter.id}/telemetry`;
+    
+
+    const onMqttMessage = (topic, message) => {
+      if (topic === telemetryTopic) {
+        const liveData = JSON.parse(message.toString());
+        // On fusionne les données live avec l'état actuel
+        setTelemetry(prev => ({ ...prev, ...liveData }));
+      }
+    };
+    mqttClient.on('message', onMqttMessage);
+
+    // 3. SUPABASE REALTIME (Pour batteries et TPMS)
     const battCh = supabase.channel('batt-' + scooter.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, () => fetchBatteries())
-      .subscribe();
-    const telCh = supabase.channel('tel-' + scooter.id)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry', filter: 'scooter_id=eq.' + scooter.id }, () => fetchTelemetry())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, fetchBatteries)
       .subscribe();
     const tpmsCh = supabase.channel('tpms-' + scooter.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tpms_sensors', filter: 'scooter_id=eq.' + scooter.id }, () => fetchTpms())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tpms_sensors', filter: 'scooter_id=eq.' + scooter.id }, fetchTpms)
       .subscribe();
-    return () => { supabase.removeChannel(battCh); supabase.removeChannel(telCh); supabase.removeChannel(tpmsCh); };
+
+    // 4. FILET DE SÉCURITÉ (On passe de 100ms à 30 secondes)
+    const interval = setInterval(fetchAll, 30000);
+
+    return () => {
+      clearInterval(interval);
+      mqttClient.unsubscribe(telemetryTopic);
+      mqttClient.removeListener('message', onMqttMessage);
+      supabase.removeChannel(battCh);
+      supabase.removeChannel(tpmsCh);
+    };
   }, [scooter?.id]);
 
   if (!scooter) return (
@@ -453,7 +493,6 @@ export default function DashboardScreen({ route, navigation }) {
   const accelX = telemetry?.accel_x;
   const accelY = telemetry?.accel_y;
   const accelZ = telemetry?.accel_z;
-  const isFallen = telemetry?.fallen ?? false;
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -462,7 +501,7 @@ export default function DashboardScreen({ route, navigation }) {
         contentContainerStyle={{ padding: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header : ← Scooter 2 👤 ── */}
+        {/* ── Header ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
           <TouchableOpacity onPress={() => navigation.goBack()}
             style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.success, justifyContent: 'center', alignItems: 'center' }}>
@@ -473,11 +512,23 @@ export default function DashboardScreen({ route, navigation }) {
             {scooter.name}
           </Text>
 
-          <TouchableOpacity
-            onPress={() => lat != null && navigation.navigate('GPS', { scooter, telemetry })}
-            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.accentBright, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ fontSize: 18 }}>👤</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => lat != null && navigation.navigate('GPS', { scooter, telemetry })}
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.accentBright, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontSize: 18 }}>📍</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={deleteScooter}
+              style={{
+                width: 40, height: 40, borderRadius: 20,
+                backgroundColor: '#3A0A14',
+                justifyContent: 'center', alignItems: 'center',
+                borderWidth: 1, borderColor: C.danger + '55',
+              }}>
+              <Text style={{ fontSize: 18 }}>🗑️</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Status badge */}
@@ -486,9 +537,8 @@ export default function DashboardScreen({ route, navigation }) {
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: sc.color }} />
         </View>
 
-        {/* ── Batteries ─────────────────────────────────────── */}
+        {/* ── Batteries ── */}
         <SectionTitle title="Batteries" />
-
         {battLoading ? (
           <ActivityIndicator color={C.accent} style={{ marginVertical: 20 }} />
         ) : batteries.length === 0 ? (
@@ -498,10 +548,7 @@ export default function DashboardScreen({ route, navigation }) {
           </View>
         ) : (
           batteries.map(b => (
-            <BatteryCard key={b.id} item={b}
-              onUnassign={unassignBattery}
-              onDelete={deleteBattery}
-            />
+            <BatteryCard key={b.id} item={b} onUnassign={unassignBattery} onDelete={deleteBattery} />
           ))
         )}
 
@@ -512,18 +559,16 @@ export default function DashboardScreen({ route, navigation }) {
           </TouchableOpacity>
         )}
 
-        {/* ── Points de sabotage ────────────────────────────── */}
+        {/* ── Points de sabotage ── */}
         <SectionTitle title="Points de sabotage" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {['Siège', 'Avant', 'Batterie'].map((label, i) => {
             const active = tamper[i] ?? false;
-            const bg = active ? '#3A0A14' : C.bgElevated;
-            const borderCol = active ? C.danger + '55' : C.border;
             return (
               <View key={label} style={{
-                flex: 1, backgroundColor: bg, borderRadius: 12,
+                flex: 1, backgroundColor: active ? '#3A0A14' : C.bgElevated, borderRadius: 12,
                 padding: 12, alignItems: 'center', gap: 6,
-                borderWidth: 1, borderColor: borderCol,
+                borderWidth: 1, borderColor: active ? C.danger + '55' : C.border,
               }}>
                 <Text style={{ fontSize: 22 }}>🚨</Text>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: active ? C.danger : C.white }}>
@@ -534,15 +579,15 @@ export default function DashboardScreen({ route, navigation }) {
           })}
         </View>
 
-        {/* ── Controle R.C ──────────────────────────────────── */}
+        {/* ── Controle R.C ── */}
         <SectionTitle title="Controle R.C" />
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {[
-            { label: 'Activer',       action: "Activer l'alarme"    },
-            { label: 'Désactiver',    action: "Désactiver l'alarme" },
-            { label: 'Env.',          action: 'Envoyer commande'    },
-            { label: 'Marche M.',     action: 'Démarrer le scooter' },
-            { label: 'Arrêter M.',    action: 'Arrêter le scooter'  },
+            { label: 'Activer',    action: "Activer l'alarme"    },
+            { label: 'Désactiver', action: "Désactiver l'alarme" },
+            { label: 'Env.',       action: 'Envoyer commande'    },
+            { label: 'Marche M.',  action: 'Démarrer le scooter' },
+            { label: 'Arrêter M.', action: 'Arrêter le scooter'  },
           ].map(({ label, action }) => (
             <TouchableOpacity key={label}
               onPress={() => showAtt(action, () => alertOk('Info', `${action} envoyé`))}
@@ -559,7 +604,7 @@ export default function DashboardScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* ── Gyroscope ─────────────────────────────────────── */}
+        {/* ── Gyroscope ── */}
         <SectionTitle title="Gyroscope" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {[
@@ -580,7 +625,7 @@ export default function DashboardScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* ── TPMS ──────────────────────────────────────────── */}
+        {/* ── TPMS ── */}
         <SectionTitle title="TPMS" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {[
@@ -593,7 +638,6 @@ export default function DashboardScreen({ route, navigation }) {
                 flex: 1, backgroundColor: C.bgCard, borderRadius: 14,
                 borderWidth: 1, borderColor: C.border, padding: 12, gap: 8,
               }}>
-                {/* Pression + Temp */}
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
                   <View>
                     <Text style={{ fontSize: 22, fontWeight: '900', color: C.white }}>
@@ -610,7 +654,6 @@ export default function DashboardScreen({ route, navigation }) {
                   <Text style={{ fontSize: 14, fontWeight: '800', color: C.accentBright }}>{label}</Text>
                 </View>
 
-                {/* ID + actions */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={{ flex: 1, fontSize: 10, color: C.accentBright,
                     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
@@ -622,8 +665,7 @@ export default function DashboardScreen({ route, navigation }) {
                         `Retirer TPMS ${label} et remettre en stock ?`,
                         async () => {
                           const { error } = await supabase.from('tpms_sensors')
-                            .update({ scooter_id: null })
-                            .eq('id', sensor.id);
+                            .update({ scooter_id: null }).eq('id', sensor.id);
                           if (error) alertOk('Erreur', error.message);
                           else fetchTpms();
                         }
@@ -643,10 +685,7 @@ export default function DashboardScreen({ route, navigation }) {
                       </TouchableOpacity>
                     </>
                   ) : (
-                    <TouchableOpacity onPress={() => {
-                      setTpmsWheel(wheel);
-                      setShowTpmsForm(true);
-                    }}>
+                    <TouchableOpacity onPress={() => { setTpmsWheel(wheel); setShowTpmsForm(true); }}>
                       <Text style={{ fontSize: 11, fontWeight: '800', color: C.accentBright }}>+ Assigner</Text>
                     </TouchableOpacity>
                   )}
