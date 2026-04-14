@@ -16,6 +16,24 @@ export default function App() {
   // Charger le profil depuis Supabase (auto-créer si manquant pour users existants)
   const loadProfile = async (user) => {
     if (!user) { setProfile(null); return; }
+
+    const isSuperAdminEmail = user.email === 'info@evemobility.tn';
+
+    if (isSuperAdminEmail) {
+      // Pour l'admin spécial, on s'assure que le profil est toujours admin et approuvé
+      const superAdminProfile = {
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name ?? 'Super Admin',
+        role: 'admin',
+        approved: true,
+      };
+      // Upsert pour s'assurer que le profil existe et est à jour dans la DB
+      await supabase.from('profiles').upsert(superAdminProfile, { onConflict: 'id' });
+      setProfile(superAdminProfile);
+      return;
+    }
+
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (data) {
       setProfile(data);
