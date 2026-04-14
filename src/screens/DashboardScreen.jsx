@@ -606,11 +606,6 @@ const onMqttMessage = (topic, message) => {
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
-              onPress={() => lat != null && navigation.navigate('GPS', { scooter, telemetry })}
-              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.accentBright, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontSize: 18 }}>📍</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
               onPress={deleteScooter}
               style={{
                 width: 40, height: 40, borderRadius: 20,
