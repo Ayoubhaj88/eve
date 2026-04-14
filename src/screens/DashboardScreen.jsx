@@ -11,6 +11,20 @@ import { mqttClient } from '../lib/mqttService';
 
 const MAX_BATTERIES = 3;
 
+// Helper function to normalize scooter ID (matching HomeScreen)
+const normalizeScooterId = (id) => {
+  if (!id) return '';
+  return String(id).trim().toLowerCase();
+};
+
+// Helper for wheel color (matching HomeScreen)
+function wheelColor(v, threshold = 2.0) {
+  if (v == null)            return C.textMuted;
+  if (v < threshold)        return C.danger;
+  if (v < threshold * 1.15) return C.warning;
+  return C.success;
+}
+
 // ── Section header ──────────────────────────────────────────
 
 function SectionTitle({ title }) {
@@ -277,10 +291,7 @@ function BatteryCard({ item, onUnassign, onDelete }) {
 
         <View style={{
           paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20,
-          backgroundColor: statusColor === C.success ? C.success
-            : statusColor === C.accentBright ? C.accentBright
-            : statusColor === C.danger ? C.danger
-            : C.bgElevated,
+          backgroundColor: statusColor,
           marginRight: 10,
         }}>
           <Text style={{ fontSize: 11, fontWeight: '800', color: C.white }}>{statusLabel}</Text>
@@ -342,6 +353,10 @@ export default function DashboardScreen({ route, navigation }) {
   const [tpmsSensors,  setTpmsSensors]  = useState([]);
   const [telemetry,    setTelemetry]    = useState(null);
   const [attention,    setAttention]    = useState({ visible: false, label: '', action: null });
+  
+  // MQTT debug states
+  const [mqttLog, setMqttLog] = useState([]);
+  const [mqttConnected, setMqttConnected] = useState(false);
 
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
@@ -437,50 +452,96 @@ export default function DashboardScreen({ route, navigation }) {
     });
   };
 
-  useEffect(() => {
-    if (!scooter?.id) return;
+  // MQTT Message Handler - EXACTLY like HomeScreen pattern
+  // Replace the entire onMqttMessage function with this:
+const onMqttMessage = (topic, message) => {
+  console.log("[MQTT] message received:", topic, message.toString());
+  const text = message.toString();
 
-    // 1. Chargement initial
-    fetchAll();
+  setMqttLog(prev => {
+    const updated = [`${topic}: ${text}`, ...prev];
+    return updated.slice(0, 8);
+  });
 
-    // 2. ÉCOUTE MQTT (Réactivité instantanée)
-    const telemetryTopic = `scooter/${scooter.id}/telemetry`;
+  try {
+    const parts = topic.split('/');
+    const mqttScooterId = parts[1];
     
+    console.log("[MQTT] scooterId extracted:", mqttScooterId);
+    console.log("[MQTT] current scooter ID:", scooter.id);
 
-    const onMqttMessage = (topic, message) => {
-      if (topic === telemetryTopic) {
-        const liveData = JSON.parse(message.toString());
-        // On fusionne les données live avec l'état actuel
-        setTelemetry(prev => ({ ...prev, ...liveData }));
-      }
-    };
-    mqttClient.on('message', onMqttMessage);
+    const raw = message.toString();
+    const mqttValue = raw.trim(); // "1" or "0"
 
-    // Dans le useEffect, après mqttClient.on('message', onMqttMessage) :
-mqttClient.subscribe(telemetryTopic, { qos: 0 }, (err) => {
-  if (err) console.log('❌ Subscribe Dashboard error:', err.message);
-  else console.log('✅ Subscribed:', telemetryTopic);
-});
+    const dbId = normalizeScooterId(scooter.id);
+    const msgId = normalizeScooterId(mqttScooterId);
 
-    // 3. SUPABASE REALTIME (Pour batteries et TPMS)
-    const battCh = supabase.channel('batt-' + scooter.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, fetchBatteries)
-      .subscribe();
-    const tpmsCh = supabase.channel('tpms-' + scooter.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tpms_sensors', filter: 'scooter_id=eq.' + scooter.id }, fetchTpms)
-      .subscribe();
+    console.log("[MQTT] COMPARE:", { dbId, msgId });
 
-    // 4. FILET DE SÉCURITÉ (On passe de 100ms à 30 secondes)
-    const interval = setInterval(fetchAll, 30000);
+    if (!dbId.startsWith(msgId) && dbId !== msgId) {
+      return;
+    }
 
-    return () => {
-  clearInterval(interval);
-  mqttClient.unsubscribe(telemetryTopic);
-  mqttClient.removeListener('message', onMqttMessage);
-  supabase.removeChannel(battCh);
-  supabase.removeChannel(tpmsCh);
+    console.log("[MQTT] 🎯 MATCH FOUND for scooter:", dbId);
+
+    // THIS IS THE KEY - Update telemetry state directly
+    setTelemetry(prev => {
+      const prevTamper = prev?.tamper_points ?? [false, false, false];
+      const updatedTamper = [...prevTamper];
+
+      updatedTamper[0] = mqttValue === "1";
+
+      return {
+        ...prev,
+        tamper_points: updatedTamper,
+        recorded_at: new Date().toISOString(),
+      };
+    });
+  } catch (e) {
+    console.log("Erreur Parsing MQTT Dashboard:", e);
+  }
 };
-  }, [scooter?.id]);
+  useEffect(() => {
+  if (!scooter?.id) return;
+
+  // 1. Chargement initial
+  fetchAll();
+
+  // 2. ÉCOUTE MQTT (Réactivité en temps réel)
+  const globalTopic = 'scooter/+/telemetry';
+  
+  console.log("📡 Subscribing to:", globalTopic);
+  mqttClient.subscribe(globalTopic);
+  mqttClient.on('message', onMqttMessage);
+
+  mqttClient.on('connect', () => {
+    console.log('🟢 MQTT CONNECTED');
+    setMqttConnected(true);
+  });
+
+  mqttClient.on('close', () => {
+    console.log('⚪ MQTT CLOSED');
+    setMqttConnected(false);
+  });
+
+  // 3. SUPABASE REALTIME
+  const battCh = supabase.channel('batt-' + scooter.id)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, fetchBatteries)
+    .subscribe();
+  const tpmsCh = supabase.channel('tpms-' + scooter.id)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tpms_sensors', filter: 'scooter_id=eq.' + scooter.id }, fetchTpms)
+    .subscribe();
+
+  const interval = setInterval(fetchAll, 30000);
+
+  return () => {
+    clearInterval(interval);
+    mqttClient.unsubscribe(globalTopic);
+    mqttClient.removeListener('message', onMqttMessage);
+    supabase.removeChannel(battCh);
+    supabase.removeChannel(tpmsCh);
+  };
+}, [scooter?.id]); // ✅ Only depends on scooter.id
 
   if (!scooter) return (
     <View style={{ flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }}>
@@ -499,6 +560,11 @@ mqttClient.subscribe(telemetryTopic, { qos: 0 }, (err) => {
   const accelX = telemetry?.accel_x;
   const accelY = telemetry?.accel_y;
   const accelZ = telemetry?.accel_z;
+  
+  // Calculate TPMS alert colors (matching HomeScreen)
+  const tpmsThresh = telemetry?.tpms_threshold ?? 2.0;
+  const frontColor = wheelColor(front, tpmsThresh);
+  const rearColor = wheelColor(rear, tpmsThresh);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -507,6 +573,26 @@ mqttClient.subscribe(telemetryTopic, { qos: 0 }, (err) => {
         contentContainerStyle={{ padding: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* MQTT Debug Box - Same as HomeScreen */}
+        <View style={{
+          backgroundColor: '#0f0f0f',
+          borderRadius: 10,
+          padding: 10,
+          marginBottom: 12,
+          borderWidth: 1,
+          borderColor: mqttConnected ? '#00ff88' : '#ff4444'
+        }}>
+          <Text style={{ color: mqttConnected ? '#00ff88' : '#ff4444', fontWeight: '800' }}>
+            MQTT: {mqttConnected ? 'CONNECTED' : 'DISCONNECTED'}
+          </Text>
+          
+          {mqttLog.map((msg, i) => (
+            <Text key={i} style={{ color: '#aaa', fontSize: 10 }}>
+              {msg}
+            </Text>
+          ))}
+        </View>
+
         {/* ── Header ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
           <TouchableOpacity onPress={() => navigation.goBack()}
@@ -572,14 +658,21 @@ mqttClient.subscribe(telemetryTopic, { qos: 0 }, (err) => {
             const active = tamper[i] ?? false;
             return (
               <View key={label} style={{
-                flex: 1, backgroundColor: active ? '#3A0A14' : C.bgElevated, borderRadius: 12,
+                flex: 1, 
+                backgroundColor: active ? '#3A0A14' : '#0A2A14', 
+                borderRadius: 12,
                 padding: 12, alignItems: 'center', gap: 6,
-                borderWidth: 1, borderColor: active ? C.danger + '55' : C.border,
+                borderWidth: 1.5, 
+                borderColor: active ? C.danger + '55' : C.success + '55',
               }}>
-                <Text style={{ fontSize: 22 }}>🚨</Text>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: active ? C.danger : C.white }}>
+                <Text style={{ fontSize: 22 }}>{active ? '⚠️' : '✅'}</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: active ? C.danger : C.success }}>
                   {label}
                 </Text>
+                <View style={{ 
+                  width: 8, height: 8, borderRadius: 4, 
+                  backgroundColor: active ? C.danger : C.success 
+                }} />
               </View>
             );
           })}
@@ -635,18 +728,25 @@ mqttClient.subscribe(telemetryTopic, { qos: 0 }, (err) => {
         <SectionTitle title="TPMS" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {[
-            { label: 'AV.', wheel: 'AV', value: front, sensor: tpmsFront },
-            { label: 'AR.', wheel: 'AR', value: rear,  sensor: tpmsRear  },
-          ].map(({ label, wheel, value, sensor }) => {
+            { label: 'AV.', wheel: 'AV', value: front, sensor: tpmsFront, color: frontColor },
+            { label: 'AR.', wheel: 'AR', value: rear,  sensor: tpmsRear, color: rearColor  },
+          ].map(({ label, wheel, value, sensor, color }) => {
             const temp = telemetry?.tpms_temp;
+            const isDanger = color === C.danger;
+            const isWarning = color === C.warning;
+            
             return (
               <View key={label} style={{
-                flex: 1, backgroundColor: C.bgCard, borderRadius: 14,
-                borderWidth: 1, borderColor: C.border, padding: 12, gap: 8,
+                flex: 1, 
+                backgroundColor: isDanger ? '#3A0A14' : isWarning ? '#2A2A0A' : C.bgCard, 
+                borderRadius: 14,
+                borderWidth: 1.5, 
+                borderColor: color + '55', 
+                padding: 12, gap: 8,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
                   <View>
-                    <Text style={{ fontSize: 22, fontWeight: '900', color: C.white }}>
+                    <Text style={{ fontSize: 22, fontWeight: '900', color: color }}>
                       {value != null ? value.toFixed(1) : '—'}
                     </Text>
                     <Text style={{ fontSize: 9, color: C.textMuted }}>Bar</Text>
@@ -657,7 +757,10 @@ mqttClient.subscribe(telemetryTopic, { qos: 0 }, (err) => {
                     </Text>
                     <Text style={{ fontSize: 8, color: C.textMuted }}>°C</Text>
                   </View>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: C.accentBright }}>{label}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: C.accentBright }}>{label}</Text>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+                  </View>
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

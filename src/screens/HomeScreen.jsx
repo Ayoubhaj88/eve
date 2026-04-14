@@ -11,6 +11,16 @@ import { mqttClient } from '../lib/mqttService';
 
 // ── Helpers ──────────────────────────────────────────────
 
+const normalizeScooterId = (id) => {
+  if (!id) return '';
+
+  // always lowercase
+  const clean = String(id).trim().toLowerCase();
+
+  // if MQTT sends short id, match against start of UUID safely
+  return clean;
+};
+
 function wheelColor(v, threshold = 2.0) {
   if (v == null)            return C.textMuted;
   if (v < threshold)        return C.danger;
@@ -302,6 +312,9 @@ export default function HomeScreen({ navigation }) {
   const [userEmail,      setUserEmail]      = useState('');
   const [showSidebar,    setShowSidebar]    = useState(false);
   const [searchText,     setSearchText]     = useState('');
+  
+  const [mqttStatus, setMqttStatus] = useState('disconnected');
+  const [mqttLog, setMqttLog] = useState([]);
 
   // Ref pour éviter les appels simultanés
   const fetchingRef = useRef(false);
@@ -348,6 +361,59 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+	const onMessage = (topic, message) => {
+		console.log("[MQTT][1] message received:", topic, message.toString());
+	  const text = message.toString();
+
+	  setMqttLog(prev => {
+		const updated = [`${topic}: ${text}`, ...prev];
+		return updated.slice(0, 8);
+	  });
+
+	  try {
+		const parts = topic.split('/');
+		const mqttScooterId = parts[1];
+		
+		console.log("[MQTT][2] scooterId extracted:", mqttScooterId);
+		console.log("[MQTT][2] current scooter IDs:", scooters.map(s => s.id));
+
+		const raw = message.toString();
+		const mqttValue = raw.trim(); // "1" or "0"
+
+		setScooters(current =>
+		  current.map(s => {
+			console.log("[MQTT][4] comparing", s.id, mqttScooterId);
+
+			const dbId = normalizeScooterId(s.id);
+			const msgId = normalizeScooterId(mqttScooterId);
+
+			console.log("[MQTT][COMPARE]", { dbId, msgId });
+
+			if (!dbId.startsWith(msgId) && dbId !== msgId) {
+			  return s;
+			}
+
+			console.log("[MQTT][MATCH] 🎯 scooter updated:", dbId);
+
+			console.log("[MQTT][4] ✅ MATCH FOUND");
+
+			const prevTamper = s.tamper_points ?? [false, false, false];
+			const updatedTamper = [...prevTamper];
+
+			updatedTamper[0] = mqttValue === "1";
+
+			return {
+			  ...s,
+			  tamper_points: updatedTamper,
+			  last_update: Date.now(),
+			};
+		  })
+		);
+	  } catch (e) {
+		console.log("Erreur Parsing MQTT HomeScreen:", e);
+	  }
+	};
+
 
   useEffect(() => {
     // 1. Chargement initial des données stockées
@@ -357,52 +423,35 @@ export default function HomeScreen({ navigation }) {
     // 2. ÉCOUTE MQTT (Réactivité en temps réel)
     // On s'abonne à tous les scooters d'un coup
     const globalTopic = 'scooter/+/telemetry';
+	
+	console.log("📡 Subscribing to:", globalTopic);
+	mqttClient.subscribe(globalTopic);
+	mqttClient.on('message', onMessage);
+
+	
     
 
-    const onMessage = (topic, message) => {
-      try {
-        const parts = topic.split('/');
-        const mqttScooterId = parts[1];
-        const liveData = JSON.parse(message.toString());
 
-        setScooters(current => current.map(s => 
-          s.id === mqttScooterId 
-            ? { 
-                ...s, 
-                // Mise à jour immédiate des 3 interrupteurs
-                tamper_points: liveData.tamper_points || s.tamper_points,
-                alarm: liveData.alarm !== undefined ? liveData.alarm : s.alarm,
-                fallen: liveData.fallen !== undefined ? liveData.fallen : s.fallen,
-                status: liveData.status || 'online',
-                last_update: new Date().toISOString() 
-              } 
-            : s
-        ));
-      } catch (e) {
-        console.log("Erreur Parsing MQTT HomeScreen:", e);
-      }
-    };
-
-
-    mqttClient.on('message', onMessage);
-
-    // Dans le useEffect, après mqttClient.on('message', onMessage) :
-mqttClient.subscribe('scooter/+/telemetry', { qos: 0 }, (err) => {
-  if (err) console.log('❌ Subscribe HomeScreen error:', err.message);
-  else console.log('✅ Subscribed: scooter/+/telemetry');
+mqttClient.on('connect', () => {
+  console.log('🟢 MQTT CONNECTED');
+  setMqttStatus('connected');
 });
 
-    // 3. Filet de sécurité Supabase (On passe à 1 minute au lieu de 500ms !)
-    const heartbeat = setInterval(fetchScooters, 60000);
+mqttClient.on('close', () => {
+  console.log('⚪ MQTT CLOSED');
+  setMqttStatus('disconnected');
+});
 
-    return () => {
-      return () => {
-          clearInterval(heartbeat);
-          mqttClient.unsubscribe('scooter/+/telemetry');
-          mqttClient.removeListener('message', onMessage);
+mqttClient.on('error', (err) => {
+  console.log('🔴 MQTT ERROR:', err.message);
+  setMqttStatus('error');
+});
+
+return () => {
+  mqttClient.unsubscribe(globalTopic);
+  mqttClient.removeListener('message', onMessage);
 };
-    };
-  }, []);
+}, []); // ✅ THIS closes useEffect
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -441,40 +490,70 @@ mqttClient.subscribe('scooter/+/telemetry', { qos: 0 }, (err) => {
           showsVerticalScrollIndicator={false}
 
           ListHeaderComponent={() => (
-            <View style={{ paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <TouchableOpacity onPress={() => setShowSidebar(true)} activeOpacity={0.7}>
-                    <Text style={{ fontSize: 22, color: C.white }}>☰</Text>
-                  </TouchableOpacity>
-                  <Text style={{ fontSize: 20, fontWeight: '900', color: C.white }}>
-                    EVE <Text style={{ color: C.accentBright }}>Mobility</Text>
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}
-                  style={{ width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 20 }}>🔔</Text>
-                </TouchableOpacity>
-              </View>
+			  <View style={{ paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}>
 
-              <View style={{
-                flexDirection: 'row', alignItems: 'center',
-                backgroundColor: C.bgCard, borderRadius: 12,
-                borderWidth: 1, borderColor: C.border,
-                paddingHorizontal: 14, height: 44, marginBottom: 18, gap: 10,
-              }}>
-                <TouchableOpacity onPress={() => setShowSidebar(true)}>
-                  <Text style={{ fontSize: 16, color: C.textMuted }}>☰</Text>
-                </TouchableOpacity>
-                <TextInput
-                  value={searchText} onChangeText={setSearchText}
-                  placeholder="Hinted search text" placeholderTextColor={C.textMuted}
-                  style={{ flex: 1, color: C.white, fontSize: 14 }}
-                />
-                <Text style={{ fontSize: 16, color: C.textMuted }}>🔍</Text>
-              </View>
-            </View>
-          )}
+				{/* HEADER ROW */}
+				<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+				  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+					<TouchableOpacity onPress={() => setShowSidebar(true)} activeOpacity={0.7}>
+					  <Text style={{ fontSize: 22, color: C.white }}>☰</Text>
+					</TouchableOpacity>
+
+					<Text style={{ fontSize: 20, fontWeight: '900', color: C.white }}>
+					  EVE <Text style={{ color: C.accentBright }}>Mobility</Text>
+					</Text>
+				  </View>
+
+				  <TouchableOpacity onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}
+					style={{ width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
+					<Text style={{ fontSize: 20 }}>🔔</Text>
+				  </TouchableOpacity>
+				</View>
+
+				{/* 🧪 MQTT DEBUG BOX (ADD THIS BLOCK) */}
+				<View style={{
+				  backgroundColor: '#0f0f0f',
+				  borderRadius: 10,
+				  padding: 10,
+				  marginBottom: 12,
+				  borderWidth: 1,
+				  borderColor: '#333'
+				}}>
+				  <Text style={{ color: '#00ff88', fontWeight: '800' }}>
+					MQTT: {mqttStatus}
+				  </Text>
+
+				  {mqttLog.map((msg, i) => (
+					<Text key={i} style={{ color: '#aaa', fontSize: 10 }}>
+					  {msg}
+					</Text>
+				  ))}
+				</View>
+
+				{/* SEARCH BAR */}
+				<View style={{
+				  flexDirection: 'row', alignItems: 'center',
+				  backgroundColor: C.bgCard, borderRadius: 12,
+				  borderWidth: 1, borderColor: C.border,
+				  paddingHorizontal: 14, height: 44, marginBottom: 18, gap: 10,
+				}}>
+				  <TouchableOpacity onPress={() => setShowSidebar(true)}>
+					<Text style={{ fontSize: 16, color: C.textMuted }}>☰</Text>
+				  </TouchableOpacity>
+
+				  <TextInput
+					value={searchText}
+					onChangeText={setSearchText}
+					placeholder="Hinted search text"
+					placeholderTextColor={C.textMuted}
+					style={{ flex: 1, color: C.white, fontSize: 14 }}
+				  />
+
+				  <Text style={{ fontSize: 16, color: C.textMuted }}>🔍</Text>
+				</View>
+
+			  </View>
+			)}
 
           renderItem={({ item }) => (
             <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
