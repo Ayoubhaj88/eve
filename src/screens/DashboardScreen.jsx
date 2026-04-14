@@ -354,9 +354,6 @@ export default function DashboardScreen({ route, navigation }) {
   const [telemetry,    setTelemetry]    = useState(null);
   const [attention,    setAttention]    = useState({ visible: false, label: '', action: null });
   
-  // MQTT debug states
-  const [mqttLog, setMqttLog] = useState([]);
-  const [mqttConnected, setMqttConnected] = useState(false);
 
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
@@ -455,34 +452,21 @@ export default function DashboardScreen({ route, navigation }) {
   // MQTT Message Handler - EXACTLY like HomeScreen pattern
   // Replace the entire onMqttMessage function with this:
 const onMqttMessage = (topic, message) => {
-  console.log("[MQTT] message received:", topic, message.toString());
   const text = message.toString();
-
-  setMqttLog(prev => {
-    const updated = [`${topic}: ${text}`, ...prev];
-    return updated.slice(0, 8);
-  });
 
   try {
     const parts = topic.split('/');
     const mqttScooterId = parts[1];
     
-    console.log("[MQTT] scooterId extracted:", mqttScooterId);
-    console.log("[MQTT] current scooter ID:", scooter.id);
-
     const raw = message.toString();
     const mqttValue = raw.trim(); // "1" or "0"
 
     const dbId = normalizeScooterId(scooter.id);
     const msgId = normalizeScooterId(mqttScooterId);
 
-    console.log("[MQTT] COMPARE:", { dbId, msgId });
-
     if (!dbId.startsWith(msgId) && dbId !== msgId) {
       return;
     }
-
-    console.log("[MQTT] 🎯 MATCH FOUND for scooter:", dbId);
 
     // THIS IS THE KEY - Update telemetry state directly
     setTelemetry(prev => {
@@ -498,7 +482,7 @@ const onMqttMessage = (topic, message) => {
       };
     });
   } catch (e) {
-    console.log("Erreur Parsing MQTT Dashboard:", e);
+    // console.log("Erreur Parsing MQTT Dashboard:", e); // Laissez cette ligne commentée si vous ne voulez aucun log
   }
 };
   useEffect(() => {
@@ -514,15 +498,6 @@ const onMqttMessage = (topic, message) => {
   mqttClient.subscribe(globalTopic);
   mqttClient.on('message', onMqttMessage);
 
-  mqttClient.on('connect', () => {
-    console.log('🟢 MQTT CONNECTED');
-    setMqttConnected(true);
-  });
-
-  mqttClient.on('close', () => {
-    console.log('⚪ MQTT CLOSED');
-    setMqttConnected(false);
-  });
 
   // 3. SUPABASE REALTIME
   const battCh = supabase.channel('batt-' + scooter.id)
@@ -573,25 +548,6 @@ const onMqttMessage = (topic, message) => {
         contentContainerStyle={{ padding: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* MQTT Debug Box - Same as HomeScreen */}
-        <View style={{
-          backgroundColor: '#0f0f0f',
-          borderRadius: 10,
-          padding: 10,
-          marginBottom: 12,
-          borderWidth: 1,
-          borderColor: mqttConnected ? '#00ff88' : '#ff4444'
-        }}>
-          <Text style={{ color: mqttConnected ? '#00ff88' : '#ff4444', fontWeight: '800' }}>
-            MQTT: {mqttConnected ? 'CONNECTED' : 'DISCONNECTED'}
-          </Text>
-          
-          {mqttLog.map((msg, i) => (
-            <Text key={i} style={{ color: '#aaa', fontSize: 10 }}>
-              {msg}
-            </Text>
-          ))}
-        </View>
 
         {/* ── Header ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
