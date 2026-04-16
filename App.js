@@ -13,14 +13,14 @@ export default function App() {
   const [session,    setSession]    = useState(undefined); // undefined = pas encore vérifié
   const [profile,    setProfile]    = useState(undefined); // undefined = en cours, null = pas trouvé
 
-  // Charger le profil depuis Supabase (auto-créer si manquant pour users existants)
+  // Charger le profil depuis Supabase
+  // Seul l'admin info@evemobility.tn est auto-créé.
+  // Tous les autres utilisateurs sont créés exclusivement par l'admin via invitation.
   const loadProfile = async (user) => {
     if (!user) { setProfile(null); return; }
 
-    const isSuperAdminEmail = user.email === 'info@evemobility.tn';
-
-    if (isSuperAdminEmail) {
-      // Pour l'admin spécial, on s'assure que le profil est toujours admin et approuvé
+    // ── Super Admin : toujours admin + approuvé ──────────────
+    if (user.email === 'info@evemobility.tn') {
       const superAdminProfile = {
         id: user.id,
         email: user.email,
@@ -28,30 +28,20 @@ export default function App() {
         role: 'admin',
         approved: true,
       };
-      // Upsert pour s'assurer que le profil existe et est à jour dans la DB
       await supabase.from('profiles').upsert(superAdminProfile, { onConflict: 'id' });
       setProfile(superAdminProfile);
       return;
     }
 
+    // ── Utilisateur invité : profil créé par l'admin ─────────
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (data) {
       setProfile(data);
       return;
     }
-    // Profil manquant (compte créé avant la table profiles) → auto-créer
-    // Si aucun admin n'existe encore, ce user devient admin
-    const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
-    const isFirst = (count ?? 0) === 0;
-    const newProfile = {
-      id: user.id,
-      email: user.email,
-      full_name: user.user_metadata?.full_name ?? '',
-      role: isFirst ? 'admin' : 'user',
-      approved: isFirst,
-    };
-    await supabase.from('profiles').insert(newProfile);
-    setProfile(newProfile);
+
+    // Aucun profil trouvé → compte non invité, accès refusé
+    setProfile({ id: user.id, email: user.email, role: 'user', approved: false, _notInvited: true });
   };
 
   useEffect(() => {
