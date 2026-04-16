@@ -12,42 +12,10 @@ function parseError(msg) {
   if (!msg) return 'Une erreur est survenue';
   if (msg.includes('Invalid login credentials'))   return '❌ Email ou mot de passe incorrect';
   if (msg.includes('Email not confirmed'))         return '📧 Vérifiez votre email pour confirmer votre compte';
-  if (msg.includes('User already registered'))     return '⚠️ Cet email est déjà utilisé — connectez-vous';
   if (msg.includes('Password should be'))          return '🔑 Mot de passe trop court (min. 6 caractères)';
   if (msg.includes('Unable to validate'))          return '❌ Email ou mot de passe incorrect';
   if (msg.includes('rate limit'))                  return '⏳ Trop de tentatives, attendez quelques secondes';
   return msg;
-}
-
-// ─── Barre force mot de passe ─────────────────────────────
-function PasswordStrength({ password }) {
-  if (!password || password.length < 2) return null;
-  let score = 0;
-  if (password.length >= 6)              score++;
-  if (password.length >= 10)             score++;
-  if (/[A-Z]/.test(password))            score++;
-  if (/[0-9]/.test(password))            score++;
-  if (/[^A-Za-z0-9]/.test(password))    score++;
-
-  const clamp   = Math.min(score, 4);
-  const colors  = ['', C.danger, '#FFB300', C.accent, C.success];
-  const labels  = ['', 'Faible', 'Moyen', 'Bon', 'Fort'];
-
-  return (
-    <View style={{ marginBottom: 14, marginTop: -4 }}>
-      <View style={{ flexDirection: 'row', gap: 4, marginBottom: 5 }}>
-        {[1,2,3,4].map(i => (
-          <View key={i} style={{
-            flex: 1, height: 3, borderRadius: 2,
-            backgroundColor: i <= clamp ? colors[clamp] : C.bgElevated,
-          }} />
-        ))}
-      </View>
-      <Text style={{ fontSize: 10, fontWeight: '700', color: colors[clamp], letterSpacing: 0.5 }}>
-        {labels[clamp]}
-      </Text>
-    </View>
-  );
 }
 
 // ─── Input animé ──────────────────────────────────────────
@@ -96,21 +64,16 @@ function Field({ label, icon, value, onChangeText, placeholder, secureTextEntry,
 
 // ─── Screen ───────────────────────────────────────────────
 export default function AuthScreen() {
-  const [mode,        setMode]        = useState('login');   // 'login' | 'register'
   const [email,       setEmail]       = useState('');
   const [password,    setPassword]    = useState('');
-  const [confirmPass, setConfirmPass] = useState('');
-  const [fullName,    setFullName]    = useState('');
   const [loading,     setLoading]     = useState(false);
   const [globalError, setGlobalError] = useState('');
   const [errors,      setErrors]      = useState({});
   const [resetSent,   setResetSent]   = useState(false);
   const [showForgot,  setShowForgot]  = useState(false);
 
-  // Animations
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
-  const tabAnim   = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -118,17 +81,6 @@ export default function AuthScreen() {
       Animated.timing(slideAnim, { toValue: 0, duration: 650, useNativeDriver: true }),
     ]).start();
   }, []);
-
-  const switchMode = (m) => {
-    Animated.timing(tabAnim, { toValue: m === 'login' ? 0 : 1, duration: 220, useNativeDriver: false }).start();
-    setMode(m);
-    setErrors({});
-    setGlobalError('');
-    setPassword('');
-    setConfirmPass('');
-    setResetSent(false);
-    setShowForgot(false);
-  };
 
   // ── LOGIN ─────────────────────────────────────────────
   const handleLogin = async () => {
@@ -141,42 +93,7 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) {
-        setGlobalError(parseError(error.message));
-      }
-      // Succès → App.js redirige automatiquement
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── REGISTER ──────────────────────────────────────────
-  const handleRegister = async () => {
-    setErrors({}); setGlobalError('');
-    const errs = {};
-    if (!fullName.trim())         errs.fullName    = 'Nom requis';
-    if (!email.trim())            errs.email       = 'Email requis';
-    if (password.length < 6)      errs.password    = 'Minimum 6 caractères';
-    if (password !== confirmPass) errs.confirmPass = 'Les mots de passe ne correspondent pas';
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(), password,
-        options: { data: { full_name: fullName.trim() } },
-      });
-      if (error) {
-        if (error.message.includes('User already registered')) {
-          // Compte existant → bascule automatiquement sur login
-          setGlobalError('');
-          switchMode('login');
-          setGlobalError('✅ Compte existant détecté — connectez-vous ci-dessous');
-        } else {
-          setGlobalError(parseError(error.message));
-        }
-      }
-      // Succès → App.js redirige automatiquement
+      if (error) setGlobalError(parseError(error.message));
     } finally {
       setLoading(false);
     }
@@ -195,13 +112,10 @@ export default function AuthScreen() {
     }
   };
 
-  const tabIndicatorLeft = tabAnim.interpolate({ inputRange: [0, 1], outputRange: ['2%', '52%'] });
-
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      {/* Déco bg */}
       <View style={{ position: 'absolute', top: -100, right: -60,  width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(0,229,255,0.035)' }} />
       <View style={{ position: 'absolute', bottom: -80, left: -80, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(0,229,255,0.02)'  }} />
 
@@ -229,28 +143,14 @@ export default function AuthScreen() {
               </Text>
             </View>
 
-            {/* Tabs */}
-            <View style={{
-              flexDirection: 'row', backgroundColor: C.bgCard,
-              borderRadius: 16, padding: 4, marginBottom: 24,
-              borderWidth: 1, borderColor: C.border, position: 'relative',
-            }}>
-              {/* Indicateur glissant */}
-              <Animated.View style={{
-                position: 'absolute', top: 4, bottom: 4,
-                width: '46%', borderRadius: 12,
-                backgroundColor: C.bgElevated,
-                borderWidth: 1, borderColor: C.borderAccent,
-                left: tabIndicatorLeft,
-              }} />
-              {['login', 'register'].map(m => (
-                <TouchableOpacity key={m} onPress={() => switchMode(m)} activeOpacity={0.7}
-                  style={{ flex: 1, paddingVertical: 11, alignItems: 'center', zIndex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: mode === m ? C.white : C.textMuted }}>
-                    {m === 'login' ? '🔐 Connexion' : '✨ Inscription'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Titre */}
+            <View style={{ alignItems: 'center', marginBottom: 28 }}>
+              <Text style={{ fontSize: 22, fontWeight: '900', color: C.white, marginBottom: 6 }}>
+                Connexion
+              </Text>
+              <Text style={{ fontSize: 12, color: C.textMuted, textAlign: 'center' }}>
+                Accès sur invitation uniquement
+              </Text>
             </View>
 
             {/* Card */}
@@ -262,11 +162,11 @@ export default function AuthScreen() {
               {/* Erreur globale */}
               {globalError ? (
                 <View style={{
-                  backgroundColor: globalError.startsWith('✅') ? C.successDim : C.dangerDim,
+                  backgroundColor: C.dangerDim,
                   borderRadius: 12, padding: 12, marginBottom: 16,
-                  borderWidth: 1, borderColor: (globalError.startsWith('✅') ? C.success : C.danger) + '44',
+                  borderWidth: 1, borderColor: C.danger + '44',
                 }}>
-                  <Text style={{ fontSize: 12, color: globalError.startsWith('✅') ? C.success : C.danger, fontWeight: '600', lineHeight: 18 }}>
+                  <Text style={{ fontSize: 12, color: C.danger, fontWeight: '600', lineHeight: 18 }}>
                     {globalError}
                   </Text>
                 </View>
@@ -280,15 +180,6 @@ export default function AuthScreen() {
                 </View>
               )}
 
-              {/* Champ nom (register seulement) */}
-              {mode === 'register' && (
-                <Field label="Nom complet" icon="👤"
-                  value={fullName} onChangeText={v => { setFullName(v); setErrors(e => ({...e, fullName: null})); }}
-                  placeholder="ex: Ahmed Ben Ali" autoCapitalize="words"
-                  error={errors.fullName}
-                />
-              )}
-
               {/* Email */}
               <Field label="Adresse email" icon="✉️"
                 value={email} onChangeText={v => { setEmail(v); setErrors(e => ({...e, email: null})); setGlobalError(''); }}
@@ -299,33 +190,21 @@ export default function AuthScreen() {
               {/* Mot de passe */}
               <Field label="Mot de passe" icon="🔑"
                 value={password} onChangeText={v => { setPassword(v); setErrors(e => ({...e, password: null})); }}
-                placeholder={mode === 'login' ? '••••••••' : 'Minimum 6 caractères'}
+                placeholder="••••••••"
                 secureTextEntry
                 error={errors.password}
               />
-              {mode === 'register' && <PasswordStrength password={password} />}
-
-              {/* Confirmer mdp (register) */}
-              {mode === 'register' && (
-                <Field label="Confirmer mot de passe" icon="🔒"
-                  value={confirmPass} onChangeText={v => { setConfirmPass(v); setErrors(e => ({...e, confirmPass: null})); }}
-                  placeholder="Répétez le mot de passe" secureTextEntry
-                  error={errors.confirmPass}
-                />
-              )}
 
               {/* Mot de passe oublié */}
-              {mode === 'login' && (
-                <TouchableOpacity onPress={() => setShowForgot(v => !v)}
-                  style={{ alignSelf: 'flex-end', marginTop: -8, marginBottom: 20 }}>
-                  <Text style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>
-                    Mot de passe oublié ?
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity onPress={() => setShowForgot(v => !v)}
+                style={{ alignSelf: 'flex-end', marginTop: -8, marginBottom: 20 }}>
+                <Text style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>
+                  Mot de passe oublié ?
+                </Text>
+              </TouchableOpacity>
 
               {/* Section forgot password inline */}
-              {showForgot && mode === 'login' && !resetSent && (
+              {showForgot && !resetSent && (
                 <View style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: C.border }}>
                   <Text style={{ fontSize: 12, color: C.textSecondary, marginBottom: 10 }}>
                     Un lien de réinitialisation sera envoyé à votre email.
@@ -339,9 +218,9 @@ export default function AuthScreen() {
                 </View>
               )}
 
-              {/* Bouton principal */}
+              {/* Bouton connexion */}
               <TouchableOpacity
-                onPress={mode === 'login' ? handleLogin : handleRegister}
+                onPress={handleLogin}
                 disabled={loading}
                 activeOpacity={0.85}
                 style={{
@@ -349,13 +228,12 @@ export default function AuthScreen() {
                   alignItems: 'center', opacity: loading ? 0.7 : 1,
                   shadowColor: C.accent, shadowOffset: { width: 0, height: 6 },
                   shadowOpacity: 0.3, shadowRadius: 14, elevation: 8,
-                  marginTop: mode === 'register' ? 4 : 0,
                 }}
               >
                 {loading
                   ? <ActivityIndicator color={C.bg} />
                   : <Text style={{ fontSize: 15, fontWeight: '900', color: C.bg, letterSpacing: 0.3 }}>
-                      {mode === 'login' ? 'Se connecter →' : 'Créer mon compte →'}
+                      Se connecter →
                     </Text>
                 }
               </TouchableOpacity>

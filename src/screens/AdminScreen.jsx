@@ -2,76 +2,69 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
-  RefreshControl, Modal, TextInput, KeyboardAvoidingView,
+  RefreshControl, Modal, TextInput, KeyboardAvoidingView, ScrollView,
 } from 'react-native';
-import { supabase } from '../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabaseClient';
 import { C, alertOk, alertConfirm } from '../constants';
 
-function UserCard({ profile, onApprove, onReject, onDelete }) {
-  const isPending = !profile.approved;
-  const isAdmin = profile.role === 'admin';
+function UserCard({ profile, onRevoke, onRestore }) {
+  const isRevoked = !profile.approved;
+  const isAdmin   = profile.role === 'admin';
 
   return (
     <View style={{
       backgroundColor: C.bgCard, borderRadius: 16, padding: 16,
-      borderWidth: 1, borderColor: isPending ? C.warning + '44' : C.border,
+      borderWidth: 1, borderColor: isRevoked ? C.danger + '33' : C.border,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         {/* Avatar */}
         <View style={{
           width: 44, height: 44, borderRadius: 22,
-          backgroundColor: isAdmin ? C.accent + '33' : isPending ? C.warning + '22' : C.success + '22',
-          borderWidth: 1, borderColor: isAdmin ? C.accent + '55' : isPending ? C.warning + '44' : C.success + '44',
+          backgroundColor: isAdmin ? C.accent + '33' : isRevoked ? C.danger + '22' : C.success + '22',
+          borderWidth: 1, borderColor: isAdmin ? C.accent + '55' : isRevoked ? C.danger + '44' : C.success + '44',
           justifyContent: 'center', alignItems: 'center',
         }}>
-          <Text style={{ fontSize: 18 }}>{isAdmin ? '👑' : isPending ? '⏳' : '👤'}</Text>
+          <Text style={{ fontSize: 18 }}>{isAdmin ? '👑' : isRevoked ? '🚫' : '👤'}</Text>
         </View>
 
         <View style={{ flex: 1, gap: 3 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 14, fontWeight: '800', color: C.white, flexShrink: 1 }} numberOfLines={1}>
-              {profile.email}
+            <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }} numberOfLines={1}>
+              {profile.full_name || 'Sans nom'}
             </Text>
             <View style={{
-              backgroundColor: isAdmin ? C.accent + '33' : isPending ? C.warning + '33' : C.success + '33',
+              backgroundColor: isAdmin ? C.accent + '33' : isRevoked ? C.danger + '22' : C.success + '33',
               borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2,
             }}>
               <Text style={{
                 fontSize: 9, fontWeight: '800',
-                color: isAdmin ? C.accentBright : isPending ? C.warning : C.success,
+                color: isAdmin ? C.accentBright : isRevoked ? C.danger : C.success,
               }}>
-                {isAdmin ? 'ADMIN' : isPending ? 'EN ATTENTE' : 'ACTIF'}
+                {isAdmin ? 'ADMIN' : isRevoked ? 'RÉVOQUÉ' : 'ACTIF'}
               </Text>
             </View>
           </View>
+          <Text style={{ fontSize: 12, color: C.textSecondary }} numberOfLines={1}>
+            {profile.email}
+          </Text>
         </View>
       </View>
 
-      {/* Actions pour non-admin */}
+      {/* Actions pour non-admin uniquement */}
       {!isAdmin && (
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          {isPending && (
-            <TouchableOpacity onPress={() => onApprove(profile)} activeOpacity={0.8}
+          {isRevoked ? (
+            <TouchableOpacity onPress={() => onRestore(profile)} activeOpacity={0.8}
               style={{
                 flex: 1, backgroundColor: C.success + '22', borderRadius: 10,
                 paddingVertical: 10, alignItems: 'center',
                 borderWidth: 1, borderColor: C.success + '44',
               }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: C.success }}>Approuver</Text>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: C.success }}>Réactiver</Text>
             </TouchableOpacity>
-          )}
-          {isPending && (
-            <TouchableOpacity onPress={() => onReject(profile)} activeOpacity={0.8}
-              style={{
-                flex: 1, backgroundColor: C.dangerDim, borderRadius: 10,
-                paddingVertical: 10, alignItems: 'center',
-                borderWidth: 1, borderColor: C.danger + '44',
-              }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: C.danger }}>Rejeter</Text>
-            </TouchableOpacity>
-          )}
-          {!isPending && (
-            <TouchableOpacity onPress={() => onDelete(profile)} activeOpacity={0.8}
+          ) : (
+            <TouchableOpacity onPress={() => onRevoke(profile)} activeOpacity={0.8}
               style={{
                 flex: 1, backgroundColor: C.dangerDim, borderRadius: 10,
                 paddingVertical: 10, alignItems: 'center',
@@ -87,79 +80,167 @@ function UserCard({ profile, onApprove, onReject, onDelete }) {
 }
 
 function InviteModal({ visible, onClose, onInvited }) {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [email,    setEmail]    = useState('');
+  const [name,     setName]     = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+
+  const reset = () => {
+    setEmail(''); setName(''); setPassword('');
+    setShowPass(false); setError('');
+  };
+
+  const handleClose = () => { reset(); onClose(); };
 
   const handleInvite = async () => {
-    if (!email.trim()) { alertOk('Erreur', 'Email requis'); return; }
+    setError('');
+    if (!name.trim())        { setError('Le nom est requis'); return; }
+    if (!email.trim())       { setError('L\'email est requis'); return; }
+    if (password.length < 6) { setError('Mot de passe : 6 caractères minimum'); return; }
+
     setLoading(true);
     try {
-      // Pré-approuver cet email dans la table invited_emails.
-      // Quand l'utilisateur s'inscrira avec cet email, le trigger SQL
-      // le détectera et créera son profil avec approved=true directement.
-      const { error } = await supabase.from('invited_emails').upsert({
-        email: email.trim().toLowerCase(),
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanName  = name.trim();
+
+      // ── 1. Créer le compte via un client temporaire (sans toucher la session admin)
+      const tempClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, storageKey: 'invite-temp' },
       });
-      if (error) throw error;
+
+      const { data, error: signUpError } = await tempClient.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: { data: { full_name: cleanName } },
+      });
+
+      if (signUpError) throw signUpError;
+
+      const userId = data?.user?.id;
+      if (!userId) throw new Error('Impossible de créer le compte utilisateur');
+
+      // ── 2. Créer le profil immédiatement approuvé
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: userId,
+        email: cleanEmail,
+        full_name: cleanName,
+        role: 'user',
+        approved: true,
+      }, { onConflict: 'id' });
+
+      if (profileError) throw profileError;
+
+      // ── 3. Envoyer un email de réinitialisation pour que l'utilisateur confirme
+      //       son adresse ET définisse son propre mot de passe (optionnel mais recommandé)
+      await supabase.auth.resetPasswordForEmail(cleanEmail);
 
       alertOk(
-        'Invitation enregistrée',
-        `L'email ${email.trim()} est pré-approuvé.\n\nPartagez l'application à cet utilisateur, il aura un accès immédiat.`
+        '✅ Compte créé',
+        `Le compte de ${cleanName} a été créé.\n\n` +
+        `Un email a été envoyé à :\n${cleanEmail}\n\n` +
+        `L'utilisateur doit cliquer sur le lien reçu pour activer son compte, ` +
+        `puis se connecter avec :\n• Email : ${cleanEmail}\n• Mot de passe : ${password}`
       );
-      setEmail('');
+      reset();
       onInvited();
       onClose();
     } catch (err) {
-      alertOk('Erreur', err.message);
+      const msg = err.message ?? 'Une erreur est survenue';
+      if (msg.includes('User already registered') || msg.includes('already been registered')) {
+        setError('Cet email est déjà utilisé');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={handleClose} />
         <View style={{
           backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+          paddingBottom: Platform.OS === 'ios' ? 44 : 28,
           borderWidth: 1, borderColor: C.border, borderBottomWidth: 0,
         }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.textMuted, alignSelf: 'center', marginBottom: 20 }} />
-          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 20, textAlign: 'center' }}>
-            Inviter un utilisateur
-          </Text>
-
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>
-            Adresse email
-          </Text>
-          <TextInput
-            value={email} onChangeText={setEmail}
-            placeholder="utilisateur@exemple.com"
-            placeholderTextColor={C.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 24,
-            }}
-          />
-
-          <View style={{
-            backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
-            borderWidth: 1, borderColor: C.border, marginBottom: 20,
-          }}>
-            <Text style={{ fontSize: 11, color: C.textSecondary, lineHeight: 18 }}>
-              L'email sera pré-approuvé. Quand cette personne se connectera dans l'application avec cet email, elle aura un accès immédiat.
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 28 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.textMuted, alignSelf: 'center', marginBottom: 20 }} />
+            <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 6, textAlign: 'center' }}>
+              Créer un accès
             </Text>
-          </View>
+            <Text style={{ fontSize: 12, color: C.textMuted, textAlign: 'center', marginBottom: 24 }}>
+              L'utilisateur recevra ses identifiants de votre part
+            </Text>
 
-          <TouchableOpacity onPress={handleInvite} disabled={loading} activeOpacity={0.8}
-            style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
-            {loading
-              ? <ActivityIndicator color={C.white} />
-              : <Text style={{ fontSize: 15, fontWeight: '900', color: C.white }}>Envoyer l'invitation</Text>}
-          </TouchableOpacity>
+            {error ? (
+              <View style={{ backgroundColor: C.dangerDim, borderRadius: 12, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: C.danger + '44' }}>
+                <Text style={{ fontSize: 12, color: C.danger, fontWeight: '600' }}>{error}</Text>
+              </View>
+            ) : null}
+
+            {/* Nom */}
+            <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>
+              Nom complet
+            </Text>
+            <TextInput
+              value={name} onChangeText={v => { setName(v); setError(''); }}
+              placeholder="ex: Ahmed Ben Ali"
+              placeholderTextColor={C.textMuted}
+              autoCapitalize="words"
+              style={{
+                backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
+                color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16,
+              }}
+            />
+
+            {/* Email */}
+            <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>
+              Adresse email
+            </Text>
+            <TextInput
+              value={email} onChangeText={v => { setEmail(v); setError(''); }}
+              placeholder="utilisateur@exemple.com"
+              placeholderTextColor={C.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={{
+                backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
+                color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16,
+              }}
+            />
+
+            {/* Mot de passe initial */}
+            <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>
+              Mot de passe initial
+            </Text>
+            <View style={{
+              flexDirection: 'row', alignItems: 'center',
+              backgroundColor: C.bgElevated, borderRadius: 12,
+              borderWidth: 1, borderColor: C.border, marginBottom: 24,
+            }}>
+              <TextInput
+                value={password} onChangeText={v => { setPassword(v); setError(''); }}
+                placeholder="Min. 6 caractères"
+                placeholderTextColor={C.textMuted}
+                secureTextEntry={!showPass}
+                style={{ flex: 1, padding: 14, color: C.white, fontSize: 15 }}
+              />
+              <TouchableOpacity onPress={() => setShowPass(v => !v)} style={{ paddingHorizontal: 14 }}>
+                <Text style={{ fontSize: 16 }}>{showPass ? '🙈' : '👁️'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity onPress={handleInvite} disabled={loading} activeOpacity={0.8}
+              style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', opacity: loading ? 0.6 : 1 }}>
+              {loading
+                ? <ActivityIndicator color={C.white} />
+                : <Text style={{ fontSize: 15, fontWeight: '900', color: C.white }}>Créer le compte</Text>}
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -195,24 +276,6 @@ export default function AdminScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  const handleApprove = (profile) => {
-    alertConfirm('Approuver', `Autoriser ${profile.email} à accéder à l'application ?`, async () => {
-      const { error } = await supabase.from('profiles')
-        .update({ approved: true })
-        .eq('id', profile.id);
-      if (error) alertOk('Erreur', error.message);
-      else fetchProfiles();
-    });
-  };
-
-  const handleReject = (profile) => {
-    alertConfirm('Rejeter', `Supprimer le compte de ${profile.email} ?`, async () => {
-      const { error } = await supabase.from('profiles').delete().eq('id', profile.id);
-      if (error) alertOk('Erreur', error.message);
-      else fetchProfiles();
-    });
-  };
-
   const handleRevoke = (profile) => {
     alertConfirm('Révoquer', `Retirer l'accès de ${profile.email} ?`, async () => {
       const { error } = await supabase.from('profiles')
@@ -223,8 +286,18 @@ export default function AdminScreen({ navigation }) {
     });
   };
 
-  const pending = profiles.filter(p => !p.approved && p.role !== 'admin');
-  const approved = profiles.filter(p => p.approved || p.role === 'admin');
+  const handleRestore = (profile) => {
+    alertConfirm('Réactiver', `Rétablir l'accès de ${profile.email} ?`, async () => {
+      const { error } = await supabase.from('profiles')
+        .update({ approved: true })
+        .eq('id', profile.id);
+      if (error) alertOk('Erreur', error.message);
+      else fetchProfiles();
+    });
+  };
+
+  const active  = profiles.filter(p =>  p.approved || p.role === 'admin');
+  const revoked = profiles.filter(p => !p.approved && p.role !== 'admin');
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -257,30 +330,30 @@ export default function AdminScreen({ navigation }) {
       ) : (
         <FlatList
           data={[
-            ...(pending.length > 0 ? [{ _section: 'pending' }] : []),
-            ...pending,
-            { _section: 'approved' },
-            ...approved,
+            { _section: 'active' },
+            ...active,
+            ...(revoked.length > 0 ? [{ _section: 'revoked' }] : []),
+            ...revoked,
           ]}
-          keyExtractor={(item, i) => item._section ? `section_${item._section}` : item.id}
+          keyExtractor={(item) => item._section ? `section_${item._section}` : item.id}
           contentContainerStyle={{ padding: 20, gap: 10 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
           renderItem={({ item }) => {
-            if (item._section === 'pending') {
+            if (item._section === 'active') {
               return (
                 <View style={{ paddingBottom: 4 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: C.warning, textTransform: 'uppercase', letterSpacing: 1.5 }}>
-                    En attente d'approbation ({pending.length})
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+                    Comptes actifs ({active.length})
                   </Text>
                 </View>
               );
             }
-            if (item._section === 'approved') {
+            if (item._section === 'revoked') {
               return (
-                <View style={{ paddingTop: pending.length > 0 ? 10 : 0, paddingBottom: 4 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
-                    Utilisateurs actifs ({approved.length})
+                <View style={{ paddingTop: 10, paddingBottom: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: C.danger, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+                    Accès révoqués ({revoked.length})
                   </Text>
                 </View>
               );
@@ -288,12 +361,19 @@ export default function AdminScreen({ navigation }) {
             return (
               <UserCard
                 profile={item}
-                onApprove={handleApprove}
-                onReject={handleReject}
-                onDelete={handleRevoke}
+                onRevoke={handleRevoke}
+                onRestore={handleRestore}
               />
             );
           }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', paddingTop: 40 }}>
+              <Text style={{ fontSize: 32, marginBottom: 12 }}>👥</Text>
+              <Text style={{ fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+                Aucun compte pour l'instant.{'\n'}Invitez des utilisateurs avec le bouton + Inviter.
+              </Text>
+            </View>
+          }
         />
       )}
 
