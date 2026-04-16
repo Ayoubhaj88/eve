@@ -29,8 +29,8 @@ function UserCard({ profile, onApprove, onReject, onDelete }) {
 
         <View style={{ flex: 1, gap: 3 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }} numberOfLines={1}>
-              {profile.full_name || 'Sans nom'}
+            <Text style={{ fontSize: 14, fontWeight: '800', color: C.white, flexShrink: 1 }} numberOfLines={1}>
+              {profile.email}
             </Text>
             <View style={{
               backgroundColor: isAdmin ? C.accent + '33' : isPending ? C.warning + '33' : C.success + '33',
@@ -44,9 +44,6 @@ function UserCard({ profile, onApprove, onReject, onDelete }) {
               </Text>
             </View>
           </View>
-          <Text style={{ fontSize: 12, color: C.textSecondary }} numberOfLines={1}>
-            {profile.email}
-          </Text>
         </View>
       </View>
 
@@ -91,7 +88,6 @@ function UserCard({ profile, onApprove, onReject, onDelete }) {
 
 function InviteModal({ visible, onClose, onInvited }) {
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleInvite = async () => {
@@ -103,16 +99,14 @@ function InviteModal({ visible, onClose, onInvited }) {
       // le détectera et créera son profil avec approved=true directement.
       const { error } = await supabase.from('invited_emails').upsert({
         email: email.trim().toLowerCase(),
-        full_name: name.trim(),
       });
       if (error) throw error;
 
       alertOk(
         'Invitation enregistrée',
-        `L'email ${email.trim()} est pré-approuvé.\n\nPartagez-lui l'application — il pourra s'inscrire directement et aura accès immédiatement.`
+        `L'email ${email.trim()} est pré-approuvé.\n\nPartagez l'application à cet utilisateur, il aura un accès immédiat.`
       );
       setEmail('');
-      setName('');
       onInvited();
       onClose();
     } catch (err) {
@@ -137,19 +131,6 @@ function InviteModal({ visible, onClose, onInvited }) {
           </Text>
 
           <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>
-            Nom complet
-          </Text>
-          <TextInput
-            value={name} onChangeText={setName}
-            placeholder="ex: Ahmed Ben Ali"
-            placeholderTextColor={C.textMuted}
-            style={{
-              backgroundColor: C.bgElevated, borderRadius: 12, padding: 14,
-              color: C.white, fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16,
-            }}
-          />
-
-          <Text style={{ fontSize: 10, fontWeight: '800', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>
             Adresse email
           </Text>
           <TextInput
@@ -169,7 +150,7 @@ function InviteModal({ visible, onClose, onInvited }) {
             borderWidth: 1, borderColor: C.border, marginBottom: 20,
           }}>
             <Text style={{ fontSize: 11, color: C.textSecondary, lineHeight: 18 }}>
-              L'email sera pré-approuvé. Quand cette personne s'inscrira dans l'application avec cet email, elle aura accès immédiatement sans attendre votre validation.
+              L'email sera pré-approuvé. Quand cette personne se connectera dans l'application avec cet email, elle aura un accès immédiat.
             </Text>
           </View>
 
@@ -226,7 +207,6 @@ export default function AdminScreen({ navigation }) {
 
   const handleReject = (profile) => {
     alertConfirm('Rejeter', `Supprimer le compte de ${profile.email} ?`, async () => {
-      // Supprimer le profil (le user auth reste, mais sans profil = pas d'accès)
       const { error } = await supabase.from('profiles').delete().eq('id', profile.id);
       if (error) alertOk('Erreur', error.message);
       else fetchProfiles();

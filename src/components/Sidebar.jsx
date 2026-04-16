@@ -14,7 +14,7 @@ const ITEMS_BASE = [
 ];
 
 const ADMIN_ITEM = { key: 'admin', icon: '👥', label: 'Gestion des comptes' };
-const COMPTE_ITEM = { key: 'compte', icon: '👤', label: 'Compte' };
+const COMPTE_ITEM = { key: 'compte', icon: '👤', label: 'Déconnexion' };
 
 export default function Sidebar({ visible, onClose, onSelect, userEmail }) {
   const [isAdmin, setIsAdmin] = useState(false);

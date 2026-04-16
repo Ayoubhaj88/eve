@@ -510,25 +510,7 @@ return () => {
 				  </TouchableOpacity>
 				</View>
 
-				{/* 🧪 MQTT DEBUG BOX (ADD THIS BLOCK) */}
-				<View style={{
-				  backgroundColor: '#0f0f0f',
-				  borderRadius: 10,
-				  padding: 10,
-				  marginBottom: 12,
-				  borderWidth: 1,
-				  borderColor: '#333'
-				}}>
-				  <Text style={{ color: '#00ff88', fontWeight: '800' }}>
-					MQTT: {mqttStatus}
-				  </Text>
-
-				  {mqttLog.map((msg, i) => (
-					<Text key={i} style={{ color: '#aaa', fontSize: 10 }}>
-					  {msg}
-					</Text>
-				  ))}
-				</View>
+				
 
 				{/* SEARCH BAR */}
 				<View style={{
