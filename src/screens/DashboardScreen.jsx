@@ -813,13 +813,6 @@ export default function DashboardScreen({ route, navigation }) {
           })}
         </View>
 
-        {/* Dernière MAJ */}
-        {telemetry?.recorded_at && (
-          <Text style={{ fontSize: 9, color: C.textMuted, textAlign: 'center', marginTop: 20 }}>
-            Dern. maj : {timeAgo(telemetry.recorded_at)}
-          </Text>
-        )}
-
         <View style={{ height: 40 }} />
       </ScrollView>
 
