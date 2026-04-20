@@ -145,24 +145,9 @@ function ScooterCard({ item, onPress }) {
           <CellLabel text="Chute" />
         </IndicCell>
 
-        <IndicCell alertColor={
-          wheelColor(item.wheel_front, item.tpms_threshold ?? 2.0) === C.danger || wheelColor(item.wheel_rear, item.tpms_threshold ?? 2.0) === C.danger
-            ? C.danger
-            : wheelColor(item.wheel_front, item.tpms_threshold ?? 2.0) === C.warning || wheelColor(item.wheel_rear, item.tpms_threshold ?? 2.0) === C.warning
-              ? C.warning
-              : (item.wheel_front != null || item.wheel_rear != null) ? C.success : null
-        }>
-          <Image source={require('../../assets/tpms.png')} style={{ width: 30, height: 30, tintColor: '#000000' }} resizeMode="contain" />
-          <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
-            <View style={{ alignItems: 'center', gap: 1 }}>
-              <Dot color={wheelColor(item.wheel_front, item.tpms_threshold ?? 2.0)} />
-              <Text style={{ fontSize: 7, color: C.textMuted }}>AV</Text>
-            </View>
-            <View style={{ alignItems: 'center', gap: 1 }}>
-              <Dot color={wheelColor(item.wheel_rear, item.tpms_threshold ?? 2.0)} />
-              <Text style={{ fontSize: 7, color: C.textMuted }}>AR</Text>
-            </View>
-          </View>
+        <IndicCell>
+          <Image source={require('../../assets/tpms.png')} style={{ width: 30, height: 30, tintColor: '#000000', opacity: 0.35 }} resizeMode="contain" />
+          <Text style={{ fontSize: 7, fontWeight: '800', color: C.textMuted }}>N/A</Text>
           <CellLabel text="Roues" />
         </IndicCell>
       </View>
@@ -348,6 +333,7 @@ export default function HomeScreen({ navigation }) {
           accel_x: t?.accel_x ?? null,
           accel_y: t?.accel_y ?? null,
           accel_z: t?.accel_z ?? null,
+          fall_threshold: s.fall_threshold ?? 2.0,
           wheel_front: t?.wheel_front ?? null,
           wheel_rear: t?.wheel_rear ?? null,
           tpms_threshold: t?.tpms_threshold ?? 2.0,
@@ -409,13 +395,33 @@ export default function HomeScreen({ navigation }) {
             };
           }
 
-          // ── UPDATE GYROSCOPE DATA ──
-          if (payload.type === 'gyro') {
+          // ── UPDATE GYROSCOPE / FALL DATA ──
+          if (payload.type === 'gyro' || payload.fallen !== undefined || payload.accel !== undefined
+              || payload.accel_x !== undefined || payload.accel_y !== undefined || payload.accel_z !== undefined) {
+            const threshold = 55; // ✅ Seuil fixe
+
+            const ax = payload.accel_x ?? payload.accel ?? s.accel_x;
+            const ay = payload.accel_y ?? payload.accel ?? s.accel_y;
+            const az = payload.accel_z ?? payload.accel ?? s.accel_z;
+
+            // ✅ Chute calculée UNIQUEMENT sur l'axe X (une seule valeur)
+            const maxAbs = Math.abs(Number(ax) || 0);
+            const hasAccelData = payload.accel !== undefined
+              || payload.accel_x !== undefined
+              || payload.accel_y !== undefined
+              || payload.accel_z !== undefined;
+            const newFallen = hasAccelData
+              ? maxAbs > threshold
+              : (payload.fallen !== undefined ? !!payload.fallen : s.fallen);
+
+            console.log(`🏠 [FALL] ${s.name}: ${s.fallen} → ${newFallen} (x=${ax} y=${ay} seuil=${threshold})`);
+
             return {
               ...s,
-              accel_x: payload.accel_x ?? s.accel_x,
-              accel_y: payload.accel_y ?? s.accel_y,
-              accel_z: payload.accel_z ?? s.accel_z,
+              fallen: newFallen,
+              accel_x: ax,
+              accel_y: ay,
+              accel_z: az,
               last_update: Date.now(),
             };
           }

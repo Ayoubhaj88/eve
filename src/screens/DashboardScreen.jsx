@@ -488,14 +488,35 @@ export default function DashboardScreen({ route, navigation }) {
         });
       }
 
-      // ── UPDATE GYROSCOPE DATA ──
-      if (payload.type === 'gyro') {
+      // ── UPDATE GYROSCOPE / FALL DATA ──
+      if (payload.type === 'gyro' || payload.fallen !== undefined || payload.accel !== undefined
+          || payload.accel_x !== undefined || payload.accel_y !== undefined || payload.accel_z !== undefined) {
         setTelemetry(prev => {
+          const threshold = 55; // ✅ Seuil fixe
+
+          // Si firmware envoie 3 axes → on les prend, sinon on réplique `accel` dans les 3
+          const ax = payload.accel_x ?? payload.accel ?? prev?.accel_x;
+          const ay = payload.accel_y ?? payload.accel ?? prev?.accel_y;
+          const az = payload.accel_z ?? payload.accel ?? prev?.accel_z;
+
+          // ✅ Chute calculée UNIQUEMENT sur l'axe X (une seule valeur)
+          const maxAbs = Math.abs(Number(ax) || 0);
+          const hasAccelData = payload.accel !== undefined
+            || payload.accel_x !== undefined
+            || payload.accel_y !== undefined
+            || payload.accel_z !== undefined;
+          const newFallen = hasAccelData
+            ? maxAbs > threshold
+            : (payload.fallen !== undefined ? !!payload.fallen : prev?.fallen);
+
+          console.log(`📊 [FALL] ${scooter?.name}: ${prev?.fallen} → ${newFallen} (x=${ax} y=${ay} seuil=${threshold})`);
+
           return {
             ...prev,
-            accel_x: payload.accel_x ?? prev?.accel_x,
-            accel_y: payload.accel_y ?? prev?.accel_y,
-            accel_z: payload.accel_z ?? prev?.accel_z,
+            fallen: newFallen,
+            accel_x: ax,
+            accel_y: ay,
+            accel_z: az,
             recorded_at: new Date().toISOString(),
           };
         });
@@ -666,8 +687,7 @@ export default function DashboardScreen({ route, navigation }) {
                 paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', gap: 5,
                 borderWidth: 1, borderColor: C.border,
               }}>
-              <Text style={{ fontSize: 16 }}>🔔</Text>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: C.white, textAlign: 'center' }} numberOfLines={2}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: C.white, textAlign: 'center' }} numberOfLines={2}>
                 {label}
               </Text>
             </TouchableOpacity>
@@ -677,27 +697,45 @@ export default function DashboardScreen({ route, navigation }) {
         {/* ── Gyroscope ── */}
         <SectionTitle title="Gyroscope" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {[
-            { label: 'Droite', value: accelX, defVal: 30,  bg: '#5C1A1A', color: '#FF6B6B' },
-            { label: 'Gauche', value: accelY, defVal: 130, bg: '#1A3A1A', color: '#51CF66' },
-            { label: 'Avant',  value: accelZ, defVal: 25,  bg: '#1A2A4A', color: '#339AF0' },
-          ].map(({ label, value, defVal, bg, color }) => (
-            <View key={label} style={{
-              flex: 1, backgroundColor: bg, borderRadius: 12,
-              padding: 12, alignItems: 'center', gap: 4,
-              borderWidth: 1, borderColor: color + '44',
-            }}>
-              <Text style={{ fontSize: 9, fontWeight: '800', color, letterSpacing: 1 }}>{label}</Text>
-              <Text style={{ fontSize: 22, fontWeight: '900', color: C.white }}>
-                {value != null ? `${value.toFixed(0)}°` : `${defVal}°`}
-              </Text>
-            </View>
-          ))}
+          {(() => {
+            const value = accelX;
+            const isFall = value != null && Math.abs(value) > 55;
+            const bg    = isFall ? '#5C1A1A' : '#1A3A1A';
+            const color = isFall ? '#FF6B6B' : '#51CF66';
+            return (
+              <View style={{
+                flex: 1, backgroundColor: bg, borderRadius: 12,
+                padding: 12, alignItems: 'center', gap: 4,
+                borderWidth: 1, borderColor: color + '44',
+              }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color, letterSpacing: 1 }}>
+                  Droite/Gauche
+                </Text>
+                <Text style={{ fontSize: 22, fontWeight: '900', color: C.white }}>
+                  {value != null ? `${value.toFixed(0)}°` : '—'}
+                </Text>
+                <Text style={{ fontSize: 9, color: C.textMuted }}>Seuil : 55</Text>
+              </View>
+            );
+          })()}
         </View>
 
-        {/* ── TPMS ── */}
+        {/* ── TPMS (indisponible) ── */}
         <SectionTitle title="TPMS" />
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{
+          backgroundColor: C.bgCard, borderRadius: 14,
+          borderWidth: 1, borderColor: C.border,
+          padding: 14, alignItems: 'center', gap: 4,
+        }}>
+          <Text style={{ fontSize: 22 }}>🚫</Text>
+          <Text style={{ fontSize: 13, fontWeight: '800', color: C.textSecondary }}>
+            Indisponible
+          </Text>
+          <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'center' }}>
+            Capteurs TPMS non connectés
+          </Text>
+        </View>
+        <View style={{ display: 'none', flexDirection: 'row', gap: 8 }}>
           {[
             { label: 'AV.', wheel: 'AV', value: front, sensor: tpmsFront, color: frontColor },
             { label: 'AR.', wheel: 'AR', value: rear,  sensor: tpmsRear, color: rearColor  },
