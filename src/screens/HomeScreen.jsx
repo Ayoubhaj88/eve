@@ -7,17 +7,13 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { C, STATUS, battColor, timeAgo, alertOk } from '../constants';
 import Sidebar from '../components/Sidebar';
-import { mqttClient } from '../lib/mqttService';
+import { mqttManager } from '../lib/mqttManager';
 
 // ── Helpers ──────────────────────────────────────────────
 
 const normalizeScooterId = (id) => {
   if (!id) return '';
-
-  // always lowercase
-  const clean = String(id).trim().toLowerCase();
-
-  // if MQTT sends short id, match against start of UUID safely
+  const clean = String(id).trim().toLowerCase().replace(/-/g, '');
   return clean;
 };
 
@@ -150,20 +146,20 @@ function ScooterCard({ item, onPress }) {
         </IndicCell>
 
         <IndicCell alertColor={
-          wheelColor(item.wheel_front, tpmsThresh) === C.danger || wheelColor(item.wheel_rear, tpmsThresh) === C.danger
+          wheelColor(item.wheel_front, item.tpms_threshold ?? 2.0) === C.danger || wheelColor(item.wheel_rear, item.tpms_threshold ?? 2.0) === C.danger
             ? C.danger
-            : wheelColor(item.wheel_front, tpmsThresh) === C.warning || wheelColor(item.wheel_rear, tpmsThresh) === C.warning
+            : wheelColor(item.wheel_front, item.tpms_threshold ?? 2.0) === C.warning || wheelColor(item.wheel_rear, item.tpms_threshold ?? 2.0) === C.warning
               ? C.warning
               : (item.wheel_front != null || item.wheel_rear != null) ? C.success : null
         }>
           <Image source={require('../../assets/tpms.png')} style={{ width: 30, height: 30, tintColor: '#000000' }} resizeMode="contain" />
           <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
             <View style={{ alignItems: 'center', gap: 1 }}>
-              <Dot color={wheelColor(item.wheel_front, tpmsThresh)} />
+              <Dot color={wheelColor(item.wheel_front, item.tpms_threshold ?? 2.0)} />
               <Text style={{ fontSize: 7, color: C.textMuted }}>AV</Text>
             </View>
             <View style={{ alignItems: 'center', gap: 1 }}>
-              <Dot color={wheelColor(item.wheel_rear, tpmsThresh)} />
+              <Dot color={wheelColor(item.wheel_rear, item.tpms_threshold ?? 2.0)} />
               <Text style={{ fontSize: 7, color: C.textMuted }}>AR</Text>
             </View>
           </View>
@@ -312,29 +308,32 @@ export default function HomeScreen({ navigation }) {
   const [userEmail,      setUserEmail]      = useState('');
   const [showSidebar,    setShowSidebar]    = useState(false);
   const [searchText,     setSearchText]     = useState('');
-  
-  const [mqttStatus, setMqttStatus] = useState('disconnected');
-  const [mqttLog, setMqttLog] = useState([]);
 
   // Ref pour éviter les appels simultanés
   const fetchingRef = useRef(false);
+  
+  // ✅ CRITICAL: Keep latest scooters in a ref so MQTT handler always has access
+  const scootersRef = useRef(scooters);
+  
+  // ✅ Update the ref whenever scooters change
+  useEffect(() => {
+    scootersRef.current = scooters;
+  }, [scooters]);
 
   const fetchScooters = async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     try {
-      // 1. On récupère les scooters et leurs batteries
       const { data: scooterData, error } = await supabase
         .from('scooters')
         .select('*, batteries(id, serial_number, slot, soc)');
       
       if (error) throw error;
 
-      // 2. On récupère la dernière télémétrie pour CHAQUE scooter (pour le switch/tamper)
       const enriched = await Promise.all((scooterData || []).map(async (s) => {
         const { data: t } = await supabase
           .from('telemetry')
-          .select('tamper_points, alarm, fallen, status, recorded_at')
+          .select('tamper_points, alarm, fallen, status, recorded_at, accel_x, accel_y, accel_z, wheel_front, wheel_rear, tpms_threshold')
           .eq('scooter_id', s.id)
           .order('recorded_at', { ascending: false })
           .limit(1)
@@ -342,11 +341,16 @@ export default function HomeScreen({ navigation }) {
 
         return {
           ...s,
-          // On injecte les tamper_points (interrupteurs) ici
           tamper_points: t?.tamper_points ?? [false, false, false],
           alarm: t?.alarm ?? false,
           fallen: t?.fallen ?? false,
           status: t?.status ?? 'offline',
+          accel_x: t?.accel_x ?? null,
+          accel_y: t?.accel_y ?? null,
+          accel_z: t?.accel_z ?? null,
+          wheel_front: t?.wheel_front ?? null,
+          wheel_rear: t?.wheel_rear ?? null,
+          tpms_threshold: t?.tpms_threshold ?? 2.0,
           last_update: t?.recorded_at,
           _batteries: s.batteries || []
         };
@@ -361,97 +365,85 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-	const onMessage = (topic, message) => {
-		console.log("[MQTT][1] message received:", topic, message.toString());
-	  const text = message.toString();
+  // ── MQTT MESSAGE HANDLER ──
+  // ✅ Access scooters from ref, NOT from closure!
+  const onMessage = (topic, message) => {
+    const text = message.toString();
 
-	  setMqttLog(prev => {
-		const updated = [`${topic}: ${text}`, ...prev];
-		return updated.slice(0, 8);
-	  });
+    try {
+      const parts = topic.split('/');
+      const mqttScooterId = parts[1];
+      
+      let payload = {};
+      try {
+        payload = JSON.parse(text);
+      } catch (e) {
+        payload = { type: 'contact', value: text === '1' ? 1 : 0 };
+      }
 
-	  try {
-		const parts = topic.split('/');
-		const mqttScooterId = parts[1];
-		
-		console.log("[MQTT][2] scooterId extracted:", mqttScooterId);
-		console.log("[MQTT][2] current scooter IDs:", scooters.map(s => s.id));
+      // ✅ Use scootersRef.current instead of closure!
+      setScooters(current => {
+        // Verify we're using latest data
+        const latestScooters = scootersRef.current;
+        
+        return latestScooters.map(s => {
+          const dbId = normalizeScooterId(s.id);
+          const msgId = normalizeScooterId(mqttScooterId);
 
-		const raw = message.toString();
-		const mqttValue = raw.trim(); // "1" or "0"
+          if (dbId !== msgId && !dbId.includes(msgId) && !msgId.includes(dbId)) {
+            return s;
+          }
 
-		setScooters(current =>
-		  current.map(s => {
-			console.log("[MQTT][4] comparing", s.id, mqttScooterId);
+          // ── UPDATE CONTACT SWITCH ──
+          if (payload.type === 'contact') {
+            const prevTamper = s.tamper_points ?? [false, false, false];
+            const updatedTamper = [...prevTamper];
+            updatedTamper[0] = payload.value === 1;
 
-			const dbId = normalizeScooterId(s.id);
-			const msgId = normalizeScooterId(mqttScooterId);
+            console.log(`🏠 [CONTACT] ${s.name}: ${prevTamper[0]} → ${updatedTamper[0]}`);
 
-			console.log("[MQTT][COMPARE]", { dbId, msgId });
+            return {
+              ...s,
+              tamper_points: updatedTamper,
+              last_update: Date.now(),
+            };
+          }
 
-			if (!dbId.startsWith(msgId) && dbId !== msgId) {
-			  return s;
-			}
+          // ── UPDATE GYROSCOPE DATA ──
+          if (payload.type === 'gyro') {
+            return {
+              ...s,
+              accel_x: payload.accel_x ?? s.accel_x,
+              accel_y: payload.accel_y ?? s.accel_y,
+              accel_z: payload.accel_z ?? s.accel_z,
+              last_update: Date.now(),
+            };
+          }
 
-			console.log("[MQTT][MATCH] 🎯 scooter updated:", dbId);
+          return s;
+        });
+      });
+    } catch (e) {
+      console.log("Erreur Parsing MQTT HomeScreen:", e);
+    }
+  };
 
-			console.log("[MQTT][4] ✅ MATCH FOUND");
-
-			const prevTamper = s.tamper_points ?? [false, false, false];
-			const updatedTamper = [...prevTamper];
-
-			updatedTamper[0] = mqttValue === "1";
-
-			return {
-			  ...s,
-			  tamper_points: updatedTamper,
-			  last_update: Date.now(),
-			};
-		  })
-		);
-	  } catch (e) {
-		console.log("Erreur Parsing MQTT HomeScreen:", e);
-	  }
-	};
-
-
+  // ✅ Setup MQTT on mount, keep it active forever
   useEffect(() => {
-    // 1. Chargement initial des données stockées
+    console.log("🏠 HomeScreen mounted - setting up MQTT");
+    
+    // Subscribe to bus
+    mqttManager.updateCallback(onMessage);
+    
+    // Load initial data
     fetchScooters();
     supabase.auth.getUser().then(({ data }) => setUserEmail(data?.user?.email ?? ''));
 
-    // 2. ÉCOUTE MQTT (Réactivité en temps réel)
-    // On s'abonne à tous les scooters d'un coup
-    const globalTopic = 'scooter/+/telemetry';
-	
-	console.log("📡 Subscribing to:", globalTopic);
-	mqttClient.subscribe(globalTopic);
-	mqttClient.on('message', onMessage);
-
-	
-    
-
-
-mqttClient.on('connect', () => {
-  console.log('🟢 MQTT CONNECTED');
-  setMqttStatus('connected');
-});
-
-mqttClient.on('close', () => {
-  console.log('⚪ MQTT CLOSED');
-  setMqttStatus('disconnected');
-});
-
-mqttClient.on('error', (err) => {
-  console.log('🔴 MQTT ERROR:', err.message);
-  setMqttStatus('error');
-});
-
-return () => {
-  mqttClient.unsubscribe(globalTopic);
-  mqttClient.removeListener('message', onMessage);
-};
-}, []); // ✅ THIS closes useEffect
+    // Empty cleanup - don't kill the bus!
+    return () => {
+      console.log("🏠 HomeScreen unmounted (bus stays active)");
+    };
+  }, []);  // ✅ Only on mount/unmount!
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -490,52 +482,50 @@ return () => {
           showsVerticalScrollIndicator={false}
 
           ListHeaderComponent={() => (
-			  <View style={{ paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}>
+            <View style={{ paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 56 : 36 }}>
 
-				{/* HEADER ROW */}
-				<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-				  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-					<TouchableOpacity onPress={() => setShowSidebar(true)} activeOpacity={0.7}>
-					  <Text style={{ fontSize: 22, color: C.white }}>☰</Text>
-					</TouchableOpacity>
+              {/* HEADER ROW */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <TouchableOpacity onPress={() => setShowSidebar(true)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 22, color: C.white }}>☰</Text>
+                  </TouchableOpacity>
 
-					<Text style={{ fontSize: 20, fontWeight: '900', color: C.white }}>
-					  EVE <Text style={{ color: C.accentBright }}>Mobility</Text>
-					</Text>
-				  </View>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: C.white }}>
+                    EVE <Text style={{ color: C.accentBright }}>Mobility</Text>
+                  </Text>
+                </View>
 
-				  <TouchableOpacity onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}
-					style={{ width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
-					<Text style={{ fontSize: 20 }}>🔔</Text>
-				  </TouchableOpacity>
-				</View>
+                <TouchableOpacity onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}
+                  style={{ width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 20 }}>🔔</Text>
+                </TouchableOpacity>
+              </View>
 
-				
+              {/* SEARCH BAR */}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center',
+                backgroundColor: C.bgCard, borderRadius: 12,
+                borderWidth: 1, borderColor: C.border,
+                paddingHorizontal: 14, height: 44, marginBottom: 18, gap: 10,
+              }}>
+                <TouchableOpacity onPress={() => setShowSidebar(true)}>
+                  <Text style={{ fontSize: 16, color: C.textMuted }}>☰</Text>
+                </TouchableOpacity>
 
-				{/* SEARCH BAR */}
-				<View style={{
-				  flexDirection: 'row', alignItems: 'center',
-				  backgroundColor: C.bgCard, borderRadius: 12,
-				  borderWidth: 1, borderColor: C.border,
-				  paddingHorizontal: 14, height: 44, marginBottom: 18, gap: 10,
-				}}>
-				  <TouchableOpacity onPress={() => setShowSidebar(true)}>
-					<Text style={{ fontSize: 16, color: C.textMuted }}>☰</Text>
-				  </TouchableOpacity>
+                <TextInput
+                  value={searchText}
+                  onChangeText={setSearchText}
+                  placeholder="Hinted search text"
+                  placeholderTextColor={C.textMuted}
+                  style={{ flex: 1, color: C.white, fontSize: 14 }}
+                />
 
-				  <TextInput
-					value={searchText}
-					onChangeText={setSearchText}
-					placeholder="Hinted search text"
-					placeholderTextColor={C.textMuted}
-					style={{ flex: 1, color: C.white, fontSize: 14 }}
-				  />
+                <Text style={{ fontSize: 16, color: C.textMuted }}>🔍</Text>
+              </View>
 
-				  <Text style={{ fontSize: 16, color: C.textMuted }}>🔍</Text>
-				</View>
-
-			  </View>
-			)}
+            </View>
+          )}
 
           renderItem={({ item }) => (
             <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>

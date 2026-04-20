@@ -7,14 +7,14 @@ import {
   KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
 import AttentionModal from '../components/AttentionModal';
-import { mqttClient } from '../lib/mqttService';
+import { mqttManager } from '../lib/mqttManager';  // ✅ ONLY import mqttManager
 
 const MAX_BATTERIES = 3;
 
 // Helper function to normalize scooter ID (matching HomeScreen)
 const normalizeScooterId = (id) => {
   if (!id) return '';
-  return String(id).trim().toLowerCase();
+  return String(id).trim().toLowerCase().replace(/-/g, '');  // ✅ Remove dashes!
 };
 
 // Helper for wheel color (matching HomeScreen)
@@ -354,7 +354,6 @@ export default function DashboardScreen({ route, navigation }) {
   const [telemetry,    setTelemetry]    = useState(null);
   const [attention,    setAttention]    = useState({ visible: false, label: '', action: null });
   
-
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
   // Refs pour éviter les appels simultanés
@@ -449,74 +448,95 @@ export default function DashboardScreen({ route, navigation }) {
     });
   };
 
-  // MQTT Message Handler - EXACTLY like HomeScreen pattern
-  // Replace the entire onMqttMessage function with this:
-const onMqttMessage = (topic, message) => {
-  const text = message.toString();
+  // ── MQTT MESSAGE HANDLER ──
+  const onMqttMessage = (topic, message) => {
+    const text = message.toString();
 
-  try {
-    const parts = topic.split('/');
-    const mqttScooterId = parts[1];
-    
-    const raw = message.toString();
-    const mqttValue = raw.trim(); // "1" or "0"
+    try {
+      const parts = topic.split('/');
+      const mqttScooterId = parts[1];
+      
+      const dbId = normalizeScooterId(scooter.id);
+      const msgId = normalizeScooterId(mqttScooterId);
 
-    const dbId = normalizeScooterId(scooter.id);
-    const msgId = normalizeScooterId(mqttScooterId);
+      // ✅ CORRECT ID comparison (matching HomeScreen)
+      if (dbId !== msgId && !dbId.includes(msgId) && !msgId.includes(dbId)) {
+        return;
+      }
 
-    if (!dbId.startsWith(msgId) && dbId !== msgId) {
-      return;
+      // Try to parse as JSON (new format)
+      let payload = {};
+      try {
+        payload = JSON.parse(text);
+      } catch (e) {
+        // Fallback: treat as simple "1" or "0" for contact switch
+        payload = { type: 'contact', value: text === '1' ? 1 : 0 };
+      }
+
+      // ── UPDATE CONTACT SWITCH ──
+      if (payload.type === 'contact') {
+        setTelemetry(prev => {
+          const prevTamper = prev?.tamper_points ?? [false, false, false];
+          const updatedTamper = [...prevTamper];
+          updatedTamper[0] = payload.value === 1;
+
+          return {
+            ...prev,
+            tamper_points: updatedTamper,
+            recorded_at: new Date().toISOString(),
+          };
+        });
+      }
+
+      // ── UPDATE GYROSCOPE DATA ──
+      if (payload.type === 'gyro') {
+        setTelemetry(prev => {
+          return {
+            ...prev,
+            accel_x: payload.accel_x ?? prev?.accel_x,
+            accel_y: payload.accel_y ?? prev?.accel_y,
+            accel_z: payload.accel_z ?? prev?.accel_z,
+            recorded_at: new Date().toISOString(),
+          };
+        });
+      }
+    } catch (e) {
+      // Silent error handling
     }
-
-    // THIS IS THE KEY - Update telemetry state directly
-    setTelemetry(prev => {
-      const prevTamper = prev?.tamper_points ?? [false, false, false];
-      const updatedTamper = [...prevTamper];
-
-      updatedTamper[0] = mqttValue === "1";
-
-      return {
-        ...prev,
-        tamper_points: updatedTamper,
-        recorded_at: new Date().toISOString(),
-      };
-    });
-  } catch (e) {
-    // console.log("Erreur Parsing MQTT Dashboard:", e); // Laissez cette ligne commentée si vous ne voulez aucun log
-  }
-};
-  useEffect(() => {
-  if (!scooter?.id) return;
-
-  // 1. Chargement initial
-  fetchAll();
-
-  // 2. ÉCOUTE MQTT (Réactivité en temps réel)
-  const globalTopic = 'scooter/+/telemetry';
-  
-  console.log("📡 Subscribing to:", globalTopic);
-  mqttClient.subscribe(globalTopic);
-  mqttClient.on('message', onMqttMessage);
-
-
-  // 3. SUPABASE REALTIME
-  const battCh = supabase.channel('batt-' + scooter.id)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, fetchBatteries)
-    .subscribe();
-  const tpmsCh = supabase.channel('tpms-' + scooter.id)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'tpms_sensors', filter: 'scooter_id=eq.' + scooter.id }, fetchTpms)
-    .subscribe();
-
-  const interval = setInterval(fetchAll, 30000);
-
-  return () => {
-    clearInterval(interval);
-    mqttClient.unsubscribe(globalTopic);
-    mqttClient.removeListener('message', onMqttMessage);
-    supabase.removeChannel(battCh);
-    supabase.removeChannel(tpmsCh);
   };
-}, [scooter?.id]); // ✅ Only depends on scooter.id
+
+  // ✅ CORRECT useEffect
+  useEffect(() => {
+    if (!scooter?.id) return;
+
+    console.log("📊 DashboardScreen mounted for:", scooter.name);
+
+    // 1. Load initial data
+    fetchAll();
+
+    // 2. ✅ Update bus callback (don't kill it!)
+    mqttManager.updateCallback(onMqttMessage);
+
+    // 3. Supabase realtime
+    const battCh = supabase.channel('batt-' + scooter.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, fetchBatteries)
+      .subscribe();
+    const tpmsCh = supabase.channel('tpms-' + scooter.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tpms_sensors', filter: 'scooter_id=eq.' + scooter.id }, fetchTpms)
+      .subscribe();
+
+    const interval = setInterval(fetchAll, 30000);
+
+    // ✅ Clean up ONLY non-MQTT stuff
+    return () => {
+      console.log("📊 DashboardScreen unmounted (bus stays active)");
+      clearInterval(interval);
+      supabase.removeChannel(battCh);
+      supabase.removeChannel(tpmsCh);
+      // ✅ NO mqttClient.unsubscribe() - bus handles it!
+      // ✅ NO mqttClient.removeListener() - bus handles it!
+    };
+  }, [scooter?.id]);
 
   if (!scooter) return (
     <View style={{ flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }}>
