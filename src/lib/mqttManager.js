@@ -8,9 +8,30 @@ class MQTTManager {
     this.listeners = {
       onMessage: null,
     };
+    this.persistentListeners = [];
     this.callCount = 0;
     this.managerId = Math.random().toString(36).substr(2, 9);
     console.log(`🔧 [mqttManager-${this.managerId}] Constructor called`);
+  }
+
+  /**
+   * Register a persistent listener that survives screen changes.
+   * Used by the notification system so it keeps receiving MQTT messages
+   * regardless of which screen owns the active screen-level callback.
+   */
+  addPersistentListener(cb) {
+    if (!this.isSetup) this.setupGlobal();
+    if (this.persistentListeners.includes(cb)) return;
+    this.persistentListeners.push(cb);
+    mqttClient.on('message', cb);
+    console.log(`🔧 [mqttManager-${this.managerId}] ➕ Persistent listener added (total=${this.persistentListeners.length})`);
+  }
+
+  removePersistentListener(cb) {
+    const idx = this.persistentListeners.indexOf(cb);
+    if (idx === -1) return;
+    this.persistentListeners.splice(idx, 1);
+    try { mqttClient.removeListener('message', cb); } catch {}
   }
 
   /**

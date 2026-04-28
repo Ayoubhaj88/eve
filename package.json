@@ -16,6 +16,7 @@
     "@react-navigation/native-stack": "^7.14.2",
     "@supabase/supabase-js": "^2.98.0",
     "expo": "~54.0.33",
+    "expo-constants": "~18.0.13",
     "expo-device": "~8.0.10",
     "expo-notifications": "~0.32.16",
     "expo-status-bar": "~3.0.9",
@@ -41,5 +42,9 @@
   "bugs": {
     "url": "https://github.com/Ayoubhaj88/eve/issues"
   },
-  "homepage": "https://github.com/Ayoubhaj88/eve#readme"
+  "homepage": "https://github.com/Ayoubhaj88/eve#readme",
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
+  }
 }

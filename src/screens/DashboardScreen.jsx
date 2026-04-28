@@ -17,14 +17,6 @@ const normalizeScooterId = (id) => {
   return String(id).trim().toLowerCase().replace(/-/g, '');  // ✅ Remove dashes!
 };
 
-// Helper for wheel color (matching HomeScreen)
-function wheelColor(v, threshold = 2.0) {
-  if (v == null)            return C.textMuted;
-  if (v < threshold)        return C.danger;
-  if (v < threshold * 1.15) return C.warning;
-  return C.success;
-}
-
 // ── Section header ──────────────────────────────────────────
 
 function SectionTitle({ title }) {
@@ -488,35 +480,23 @@ export default function DashboardScreen({ route, navigation }) {
         });
       }
 
-      // ── UPDATE GYROSCOPE / FALL DATA ──
-      if (payload.type === 'gyro' || payload.fallen !== undefined || payload.accel !== undefined
-          || payload.accel_x !== undefined || payload.accel_y !== undefined || payload.accel_z !== undefined) {
+      // ── UPDATE FALL DATA (single axis accel_x) ──
+      if (payload.type === 'gyro' || payload.fallen !== undefined
+          || payload.accel !== undefined || payload.accel_x !== undefined) {
         setTelemetry(prev => {
-          const threshold = 55; // ✅ Seuil fixe
-
-          // Si firmware envoie 3 axes → on les prend, sinon on réplique `accel` dans les 3
+          const threshold = 55;
           const ax = payload.accel_x ?? payload.accel ?? prev?.accel_x;
-          const ay = payload.accel_y ?? payload.accel ?? prev?.accel_y;
-          const az = payload.accel_z ?? payload.accel ?? prev?.accel_z;
-
-          // ✅ Chute calculée UNIQUEMENT sur l'axe X (une seule valeur)
-          const maxAbs = Math.abs(Number(ax) || 0);
-          const hasAccelData = payload.accel !== undefined
-            || payload.accel_x !== undefined
-            || payload.accel_y !== undefined
-            || payload.accel_z !== undefined;
+          const hasAccelData = payload.accel !== undefined || payload.accel_x !== undefined;
           const newFallen = hasAccelData
-            ? maxAbs > threshold
+            ? Math.abs(Number(ax) || 0) > threshold
             : (payload.fallen !== undefined ? !!payload.fallen : prev?.fallen);
 
-          console.log(`📊 [FALL] ${scooter?.name}: ${prev?.fallen} → ${newFallen} (x=${ax} y=${ay} seuil=${threshold})`);
+          console.log(`📊 [FALL] ${scooter?.name}: ${prev?.fallen} → ${newFallen} (x=${ax} seuil=${threshold})`);
 
           return {
             ...prev,
             fallen: newFallen,
             accel_x: ax,
-            accel_y: ay,
-            accel_z: az,
             recorded_at: new Date().toISOString(),
           };
         });
@@ -570,17 +550,7 @@ export default function DashboardScreen({ route, navigation }) {
 
   const sc     = STATUS[telemetry?.status ?? scooter.status] ?? STATUS.offline;
   const tamper = telemetry?.tamper_points ?? [false, false, false];
-  const front  = telemetry?.wheel_front;
-  const rear   = telemetry?.wheel_rear;
-  const lat    = telemetry?.latitude;
   const accelX = telemetry?.accel_x;
-  const accelY = telemetry?.accel_y;
-  const accelZ = telemetry?.accel_z;
-  
-  // Calculate TPMS alert colors (matching HomeScreen)
-  const tpmsThresh = telemetry?.tpms_threshold ?? 2.0;
-  const frontColor = wheelColor(front, tpmsThresh);
-  const rearColor = wheelColor(rear, tpmsThresh);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -734,83 +704,6 @@ export default function DashboardScreen({ route, navigation }) {
           <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'center' }}>
             Capteurs TPMS non connectés
           </Text>
-        </View>
-        <View style={{ display: 'none', flexDirection: 'row', gap: 8 }}>
-          {[
-            { label: 'AV.', wheel: 'AV', value: front, sensor: tpmsFront, color: frontColor },
-            { label: 'AR.', wheel: 'AR', value: rear,  sensor: tpmsRear, color: rearColor  },
-          ].map(({ label, wheel, value, sensor, color }) => {
-            const temp = telemetry?.tpms_temp;
-            const isDanger = color === C.danger;
-            const isWarning = color === C.warning;
-            
-            return (
-              <View key={label} style={{
-                flex: 1, 
-                backgroundColor: isDanger ? '#3A0A14' : isWarning ? '#2A2A0A' : C.bgCard, 
-                borderRadius: 14,
-                borderWidth: 1.5, 
-                borderColor: color + '55', 
-                padding: 12, gap: 8,
-              }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                  <View>
-                    <Text style={{ fontSize: 22, fontWeight: '900', color: color }}>
-                      {value != null ? value.toFixed(1) : '—'}
-                    </Text>
-                    <Text style={{ fontSize: 9, color: C.textMuted }}>Bar</Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: C.textSecondary }}>
-                      {temp != null ? temp : '30'}
-                    </Text>
-                    <Text style={{ fontSize: 8, color: C.textMuted }}>°C</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: C.accentBright }}>{label}</Text>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ flex: 1, fontSize: 10, color: C.accentBright,
-                    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
-                    {sensor?.sensor_id ?? '—'}
-                  </Text>
-                  {sensor ? (
-                    <>
-                      <TouchableOpacity onPress={() => showAtt(
-                        `Retirer TPMS ${label} et remettre en stock ?`,
-                        async () => {
-                          const { error } = await supabase.from('tpms_sensors')
-                            .update({ scooter_id: null }).eq('id', sensor.id);
-                          if (error) alertOk('Erreur', error.message);
-                          else fetchTpms();
-                        }
-                      )}>
-                        <Text style={{ fontSize: 13 }}>⚙️</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => showAtt(
-                        `Supprimer TPMS ${label} définitivement ?`,
-                        async () => {
-                          const { error } = await supabase.from('tpms_sensors')
-                            .delete().eq('id', sensor.id);
-                          if (error) alertOk('Erreur', error.message);
-                          else fetchTpms();
-                        }
-                      )}>
-                        <Text style={{ fontSize: 13, color: C.danger }}>✕</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity onPress={() => { setTpmsWheel(wheel); setShowTpmsForm(true); }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: C.accentBright }}>+ Assigner</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            );
-          })}
         </View>
 
         <View style={{ height: 40 }} />

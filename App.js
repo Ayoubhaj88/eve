@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from './src/lib/supabaseClient';
-import { requestPermissions, startNotificationListener, stopNotificationListener } from './src/lib/notifications';
+import { requestPermissions, registerPushToken, startNotificationListener, stopNotificationListener } from './src/lib/notifications';
 import SplashScreen from './src/screens/SplashScreen';
 import AppNavigator  from './src/navigation/Appnavigator';
 import AuthScreen    from './src/screens/AuthScreen';
@@ -49,8 +49,14 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       const s = data.session ?? null;
       setSession(s);
-      if (s) loadProfile(s.user);
-      else setProfile(null);
+      if (s) {
+        loadProfile(s.user);
+        requestPermissions();
+        registerPushToken();
+        startNotificationListener();
+      } else {
+        setProfile(null);
+      }
     });
 
     // Écouter les changements d'auth
@@ -59,6 +65,7 @@ export default function App() {
       if (s) {
         loadProfile(s.user);
         requestPermissions();
+        registerPushToken();
         startNotificationListener();
       } else {
         setProfile(null);

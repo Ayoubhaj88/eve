@@ -17,13 +17,6 @@ const normalizeScooterId = (id) => {
   return clean;
 };
 
-function wheelColor(v, threshold = 2.0) {
-  if (v == null)            return C.textMuted;
-  if (v < threshold)        return C.danger;
-  if (v < threshold * 1.15) return C.warning;
-  return C.success;
-}
-
 // ── Indicator cell ────────────────────────────────────────
 
 function IndicCell({ children, alertColor }) {
@@ -89,7 +82,6 @@ function ScooterCard({ item, onPress }) {
   const tamper    = item.tamper_points ?? [false, false, false];
   const anyTamper = tamper.some(Boolean);
   const batteries = item._batteries ?? [];
-  const tpmsThresh = item.tpms_threshold ?? 2.0;
 
   return (
     <TouchableOpacity
@@ -312,13 +304,14 @@ export default function HomeScreen({ navigation }) {
       const { data: scooterData, error } = await supabase
         .from('scooters')
         .select('*, batteries(id, serial_number, slot, soc)');
-      
+
       if (error) throw error;
 
+      // Fetch telemetry par scooter (en parallele)
       const enriched = await Promise.all((scooterData || []).map(async (s) => {
         const { data: t } = await supabase
           .from('telemetry')
-          .select('tamper_points, alarm, fallen, status, recorded_at, accel_x, accel_y, accel_z, wheel_front, wheel_rear, tpms_threshold')
+          .select('tamper_points, alarm, fallen, status, accel_x, recorded_at')
           .eq('scooter_id', s.id)
           .order('recorded_at', { ascending: false })
           .limit(1)
@@ -331,14 +324,9 @@ export default function HomeScreen({ navigation }) {
           fallen: t?.fallen ?? false,
           status: t?.status ?? 'offline',
           accel_x: t?.accel_x ?? null,
-          accel_y: t?.accel_y ?? null,
-          accel_z: t?.accel_z ?? null,
-          fall_threshold: s.fall_threshold ?? 2.0,
-          wheel_front: t?.wheel_front ?? null,
-          wheel_rear: t?.wheel_rear ?? null,
-          tpms_threshold: t?.tpms_threshold ?? 2.0,
+          fall_threshold: s.fall_threshold ?? 55,
           last_update: t?.recorded_at,
-          _batteries: s.batteries || []
+          _batteries: s.batteries || [],
         };
       }));
 
@@ -395,33 +383,22 @@ export default function HomeScreen({ navigation }) {
             };
           }
 
-          // ── UPDATE GYROSCOPE / FALL DATA ──
-          if (payload.type === 'gyro' || payload.fallen !== undefined || payload.accel !== undefined
-              || payload.accel_x !== undefined || payload.accel_y !== undefined || payload.accel_z !== undefined) {
-            const threshold = 55; // ✅ Seuil fixe
-
+          // ── UPDATE FALL DATA (single axis accel_x) ──
+          if (payload.type === 'gyro' || payload.fallen !== undefined
+              || payload.accel !== undefined || payload.accel_x !== undefined) {
+            const threshold = 55;
             const ax = payload.accel_x ?? payload.accel ?? s.accel_x;
-            const ay = payload.accel_y ?? payload.accel ?? s.accel_y;
-            const az = payload.accel_z ?? payload.accel ?? s.accel_z;
-
-            // ✅ Chute calculée UNIQUEMENT sur l'axe X (une seule valeur)
-            const maxAbs = Math.abs(Number(ax) || 0);
-            const hasAccelData = payload.accel !== undefined
-              || payload.accel_x !== undefined
-              || payload.accel_y !== undefined
-              || payload.accel_z !== undefined;
+            const hasAccelData = payload.accel !== undefined || payload.accel_x !== undefined;
             const newFallen = hasAccelData
-              ? maxAbs > threshold
+              ? Math.abs(Number(ax) || 0) > threshold
               : (payload.fallen !== undefined ? !!payload.fallen : s.fallen);
 
-            console.log(`🏠 [FALL] ${s.name}: ${s.fallen} → ${newFallen} (x=${ax} y=${ay} seuil=${threshold})`);
+            console.log(`🏠 [FALL] ${s.name}: ${s.fallen} → ${newFallen} (x=${ax} seuil=${threshold})`);
 
             return {
               ...s,
               fallen: newFallen,
               accel_x: ax,
-              accel_y: ay,
-              accel_z: az,
               last_update: Date.now(),
             };
           }
@@ -445,9 +422,37 @@ export default function HomeScreen({ navigation }) {
     fetchScooters();
     supabase.auth.getUser().then(({ data }) => setUserEmail(data?.user?.email ?? ''));
 
+    // Realtime : MAJ couleur batteries quand soc change cote BD
+    const battCh = supabase.channel('home-batteries')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'batteries',
+      }, (payload) => {
+        const row = payload.new ?? payload.old;
+        if (!row?.scooter_id) return;
+        setScooters(curr => curr.map(s => {
+          if (s.id !== row.scooter_id) return s;
+          let newBatts = [...(s._batteries ?? [])];
+          if (payload.eventType === 'DELETE') {
+            newBatts = newBatts.filter(b => b.id !== row.id);
+          } else if (payload.eventType === 'INSERT') {
+            if (!newBatts.find(b => b.id === row.id)) newBatts.push(row);
+          } else {
+            // UPDATE
+            const idx = newBatts.findIndex(b => b.id === row.id);
+            if (idx >= 0) newBatts[idx] = { ...newBatts[idx], ...row };
+            else newBatts.push(row);
+          }
+          return { ...s, _batteries: newBatts };
+        }));
+      })
+      .subscribe();
+
     // Empty cleanup - don't kill the bus!
     return () => {
       console.log("🏠 HomeScreen unmounted (bus stays active)");
+      supabase.removeChannel(battCh);
     };
   }, []);  // ✅ Only on mount/unmount!
 

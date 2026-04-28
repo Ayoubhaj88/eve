@@ -172,7 +172,7 @@ function CategoryButton({ label, onPress }) {
 
 function GyroscopeNotifScreen({ onBack }) {
   const { values: s, set, save, saving } = useSettings('notif_gyroscope', {
-    rotG: '', rotD: '', rotA: '', son: true, msg: '',
+    seuil: '55', son: true, msg: '',
   });
 
   return (
@@ -180,10 +180,8 @@ function GyroscopeNotifScreen({ onBack }) {
       <Header title="GYROSCOPE" subtitle="Notifications" onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
         <Card>
-          <SectionLabel text="Seuils" />
-          <FieldRow label="Rotation Gauche" value={s.rotG} onChangeText={v => set('rotG', v)} unit="°" />
-          <FieldRow label="Rotation Droite" value={s.rotD} onChangeText={v => set('rotD', v)} unit="°" />
-          <FieldRow label="Rotation Avant"  value={s.rotA} onChangeText={v => set('rotA', v)} unit="°" />
+          <SectionLabel text="Reglage" />
+          <FieldRow label="Seuil de chute" value={s.seuil} onChangeText={v => set('seuil', v)} />
         </Card>
 
         <Card>
@@ -191,37 +189,13 @@ function GyroscopeNotifScreen({ onBack }) {
         </Card>
 
         <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
-        <SaveButton onPress={save} loading={saving} />
-      </ScrollView>
-    </View>
-  );
-}
 
-// ── Écran TPMS (Notifications) ───────────────────────────────
-
-function TpmsNotifScreen({ onBack }) {
-  const { values: s, set, save, saving } = useSettings('notif_tpms', {
-    moyen: '', critique: '', type: '', alarme: true, plein: false, son: true, msg: '',
-  });
-
-  return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <Header title="TPMS" subtitle="Notifications" onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
-        <Card>
-          <SectionLabel text="Seuils" />
-          <FieldRow label="Moyen"    value={s.moyen}    onChangeText={v => set('moyen', v)}    unit="Bar" />
-          <FieldRow label="Critique" value={s.critique} onChangeText={v => set('critique', v)} unit="Bar" />
-          <FieldRow label="Type"     value={s.type}     onChangeText={v => set('type', v)} />
+        <Card style={{ backgroundColor: C.bgElevated }}>
+          <Text style={{ fontSize: 11, color: C.textSecondary, lineHeight: 18 }}>
+            NB: Une chute est detectee lorsque |accel_x| depasse ce seuil (defaut 55).
+          </Text>
         </Card>
 
-        <Card>
-          <ToggleRow label="Alarme"      value={s.alarme} onValueChange={v => set('alarme', v)} />
-          <ToggleRow label="Plein ecran" value={s.plein}  onValueChange={v => set('plein', v)} />
-          <ToggleRow label="Son Alarme"  value={s.son}    onValueChange={v => set('son', v)} />
-        </Card>
-
-        <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
         <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
@@ -232,7 +206,7 @@ function TpmsNotifScreen({ onBack }) {
 
 function BatterieNotifScreen({ onBack }) {
   const { values: s, set, save, saving } = useSettings('notif_batterie', {
-    son: true, msg: '', alarme: '',
+    son: true, msg: '', alarme: '20',
   });
 
   return (
@@ -256,28 +230,6 @@ function BatterieNotifScreen({ onBack }) {
           </Text>
         </Card>
 
-        <SaveButton onPress={save} loading={saving} />
-      </ScrollView>
-    </View>
-  );
-}
-
-// ── Écran SABOTAGE (Notifications) ───────────────────────────
-
-function SabotageNotifScreen({ onBack }) {
-  const { values: s, set, save, saving } = useSettings('notif_sabotage', {
-    son: true, msg: '',
-  });
-
-  return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <Header title="SABOTAGE" subtitle="Notifications" onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
-        <Card>
-          <ToggleRow label="Son Alarme" value={s.son} onValueChange={v => set('son', v)} />
-        </Card>
-
-        <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
         <SaveButton onPress={save} loading={saving} />
       </ScrollView>
     </View>
@@ -318,55 +270,12 @@ function AlarmeOnNotifScreen({ onBack }) {
   );
 }
 
-// ── Écran ENVOI LED (Reglage Fn.) ────────────────────────────
-
-function EnvoiLedScreen({ onBack }) {
-  const { values: s, set, save, saving } = useSettings('notif_envoiLed', {
-    type: 'Continue', duree: '', rythme: '',
-  });
-
-  return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <Header title="ENVOI LED" subtitle="Reglage Fn." onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
-        <Card>
-          <SectionLabel text="Type" />
-          {['Continue', 'Clignotant'].map(t => (
-            <TouchableOpacity key={t} onPress={() => set('type', t)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }}>
-              <View style={{
-                width: 20, height: 20, borderRadius: 10, borderWidth: 2,
-                borderColor: s.type === t ? C.accentBright : C.textMuted,
-                justifyContent: 'center', alignItems: 'center',
-              }}>
-                {s.type === t && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.accentBright }} />}
-              </View>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: s.type === t ? C.white : C.textSecondary }}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-        </Card>
-
-        <Card>
-          <SectionLabel text="Reglage" />
-          <FieldRow label="Durée"  value={s.duree}  onChangeText={v => set('duree', v)}  unit="S" />
-          <FieldRow label="Rythme" value={s.rythme} onChangeText={v => set('rythme', v)} unit="s" />
-        </Card>
-
-        <SaveButton onPress={save} loading={saving} />
-      </ScrollView>
-    </View>
-  );
-}
-
 // ── Liste Notifications ──────────────────────────────────────
 
 const NOTIF_CATEGORIES = [
   { key: 'batterie',  label: 'BATTERIE'  },
-  { key: 'tpms',      label: 'TPMS'      },
   { key: 'gyroscope', label: 'GYROSCOPE' },
-  { key: 'sabotage',  label: 'SABOTAGE'  },
   { key: 'alarmeOn',  label: 'ALARME ON' },
-  { key: 'envoiLed',  label: 'ENVOI LED' },
 ];
 
 // ── Écran principal Parametres ───────────────────────────────
@@ -374,12 +283,9 @@ const NOTIF_CATEGORIES = [
 export default function ParametresScreen({ navigation }) {
   const [screen, setScreen] = useState('main');
 
-  if (screen === 'gyroscope')     return <GyroscopeNotifScreen    onBack={() => setScreen('main')} />;
-  if (screen === 'tpms')          return <TpmsNotifScreen         onBack={() => setScreen('main')} />;
-  if (screen === 'batterie')      return <BatterieNotifScreen     onBack={() => setScreen('main')} />;
-  if (screen === 'sabotage')      return <SabotageNotifScreen     onBack={() => setScreen('main')} />;
-  if (screen === 'alarmeOn')      return <AlarmeOnNotifScreen     onBack={() => setScreen('main')} />;
-  if (screen === 'envoiLed')      return <EnvoiLedScreen          onBack={() => setScreen('main')} />;
+  if (screen === 'gyroscope')  return <GyroscopeNotifScreen onBack={() => setScreen('main')} />;
+  if (screen === 'batterie')   return <BatterieNotifScreen  onBack={() => setScreen('main')} />;
+  if (screen === 'alarmeOn')   return <AlarmeOnNotifScreen  onBack={() => setScreen('main')} />;
 
   // Main = liste des notifications directement
   return (

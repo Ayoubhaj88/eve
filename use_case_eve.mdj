@@ -1,0 +1,668 @@
+{
+  "name": "EVE Mobility - Use Case Diagram",
+  "_type": "Project",
+  "_id": "proj-eve-uc",
+  "ownedElements": [
+    {
+      "_type": "UMLModel",
+      "_id": "model-eve",
+      "name": "EVE Mobility Model",
+      "ownedElements": [
+        {
+          "_type": "UMLUseCaseDiagram",
+          "_id": "ucd-main",
+          "name": "Cas d'Utilisation Global",
+          "ownedViews": [
+
+            {
+              "_type": "UMLSubjectView",
+              "_id": "sv-system",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "sub-system" },
+              "left": 200, "top": 60, "width": 900, "height": 760,
+              "fillColor": "#F5F5F5",
+              "lineColor": "#1565C0",
+              "font": "Arial;14;1",
+              "nameLabel": {
+                "_type": "LabelView",
+                "_id": "sv-system-lbl",
+                "text": "Systeme EVE Mobility",
+                "font": "Arial;14;1"
+              }
+            },
+
+            {
+              "_type": "UMLActorView",
+              "_id": "av-proprio",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "ac-proprio" },
+              "left": 30, "top": 200, "width": 80, "height": 100,
+              "nameLabel": {
+                "_type": "LabelView",
+                "_id": "av-proprio-lbl",
+                "text": "Proprietaire"
+              }
+            },
+
+            {
+              "_type": "UMLActorView",
+              "_id": "av-admin",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "ac-admin" },
+              "left": 30, "top": 500, "width": 80, "height": 100,
+              "nameLabel": {
+                "_type": "LabelView",
+                "_id": "av-admin-lbl",
+                "text": "Administrateur"
+              }
+            },
+
+            {
+              "_type": "UMLActorView",
+              "_id": "av-esp32",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "ac-esp32" },
+              "left": 1160, "top": 200, "width": 80, "height": 100,
+              "nameLabel": {
+                "_type": "LabelView",
+                "_id": "av-esp32-lbl",
+                "text": "ESP32"
+              }
+            },
+
+            {
+              "_type": "UMLActorView",
+              "_id": "av-hivemq",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "ac-hivemq" },
+              "left": 1160, "top": 500, "width": 80, "height": 100,
+              "nameLabel": {
+                "_type": "LabelView",
+                "_id": "av-hivemq-lbl",
+                "text": "HiveMQ Cloud"
+              }
+            },
+
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-auth",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-auth" },
+              "left": 230, "top": 90, "width": 180, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-auth-lbl", "text": "S'authentifier" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-dashboard",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-dashboard" },
+              "left": 450, "top": 90, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-dashboard-lbl", "text": "Consulter le dashboard" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-batteries",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-batteries" },
+              "left": 230, "top": 180, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-batteries-lbl", "text": "Surveiller les batteries" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-tpms",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-tpms" },
+              "left": 470, "top": 180, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-tpms-lbl", "text": "Surveiller les pneus (TPMS)" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-alertes",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-alertes" },
+              "left": 230, "top": 270, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-alertes-lbl", "text": "Consulter les alertes" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-archiver",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-archiver" },
+              "left": 470, "top": 270, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-archiver-lbl", "text": "Archiver une alerte" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-alarme",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-alarme" },
+              "left": 350, "top": 360, "width": 220, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-alarme-lbl", "text": "Activer/Desactiver l'alarme" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-seuil-chute",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-seuil-chute" },
+              "left": 230, "top": 450, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-seuil-chute-lbl", "text": "Configurer seuil de chute" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-seuil-tpms",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-seuil-tpms" },
+              "left": 470, "top": 450, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-seuil-tpms-lbl", "text": "Configurer seuil TPMS" }
+            },
+
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-inviter",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-inviter" },
+              "left": 230, "top": 560, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-inviter-lbl", "text": "Inviter un utilisateur" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-approuver",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-approuver" },
+              "left": 470, "top": 560, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-approuver-lbl", "text": "Approuver un compte" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-scooter",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-scooter" },
+              "left": 720, "top": 560, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-scooter-lbl", "text": "Ajouter un scooter" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-stock-bat",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-stock-bat" },
+              "left": 230, "top": 650, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-stock-bat-lbl", "text": "Gerer stock batteries" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-stock-tpms",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-stock-tpms" },
+              "left": 470, "top": 650, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-stock-tpms-lbl", "text": "Gerer stock TPMS" }
+            },
+
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-collecter",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-collecter" },
+              "left": 750, "top": 90, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-collecter-lbl", "text": "Collecter donnees capteurs" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-chute",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-chute" },
+              "left": 750, "top": 180, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-chute-lbl", "text": "Detecter une chute" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-tamper",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-tamper" },
+              "left": 750, "top": 270, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-tamper-lbl", "text": "Detecter un sabotage (tamper)" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-publier",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-publier" },
+              "left": 750, "top": 360, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-publier-lbl", "text": "Publier la telemetrie MQTT" }
+            },
+            {
+              "_type": "UMLUseCaseView",
+              "_id": "ucv-cmd",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "uc-cmd" },
+              "left": 750, "top": 450, "width": 200, "height": 50,
+              "nameLabel": { "_type": "LabelView", "_id": "ucv-cmd-lbl", "text": "Recevoir commande alarme" }
+            },
+
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-proprio-auth",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-proprio-auth-m" },
+              "tail": { "$ref": "av-proprio" },
+              "head": { "$ref": "ucv-auth" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-proprio-dashboard",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-proprio-dashboard-m" },
+              "tail": { "$ref": "av-proprio" },
+              "head": { "$ref": "ucv-dashboard" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-proprio-batteries",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-proprio-batteries-m" },
+              "tail": { "$ref": "av-proprio" },
+              "head": { "$ref": "ucv-batteries" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-proprio-tpms",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-proprio-tpms-m" },
+              "tail": { "$ref": "av-proprio" },
+              "head": { "$ref": "ucv-tpms" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-proprio-alertes",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-proprio-alertes-m" },
+              "tail": { "$ref": "av-proprio" },
+              "head": { "$ref": "ucv-alertes" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-proprio-alarme",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-proprio-alarme-m" },
+              "tail": { "$ref": "av-proprio" },
+              "head": { "$ref": "ucv-alarme" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-proprio-seuil-chute",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-proprio-seuil-chute-m" },
+              "tail": { "$ref": "av-proprio" },
+              "head": { "$ref": "ucv-seuil-chute" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-proprio-seuil-tpms",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-proprio-seuil-tpms-m" },
+              "tail": { "$ref": "av-proprio" },
+              "head": { "$ref": "ucv-seuil-tpms" }
+            },
+
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-admin-inviter",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-admin-inviter-m" },
+              "tail": { "$ref": "av-admin" },
+              "head": { "$ref": "ucv-inviter" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-admin-approuver",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-admin-approuver-m" },
+              "tail": { "$ref": "av-admin" },
+              "head": { "$ref": "ucv-approuver" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-admin-scooter",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-admin-scooter-m" },
+              "tail": { "$ref": "av-admin" },
+              "head": { "$ref": "ucv-scooter" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-admin-stock-bat",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-admin-stock-bat-m" },
+              "tail": { "$ref": "av-admin" },
+              "head": { "$ref": "ucv-stock-bat" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-admin-stock-tpms",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-admin-stock-tpms-m" },
+              "tail": { "$ref": "av-admin" },
+              "head": { "$ref": "ucv-stock-tpms" }
+            },
+
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-esp32-collecter",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-esp32-collecter-m" },
+              "tail": { "$ref": "av-esp32" },
+              "head": { "$ref": "ucv-collecter" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-esp32-chute",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-esp32-chute-m" },
+              "tail": { "$ref": "av-esp32" },
+              "head": { "$ref": "ucv-chute" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-esp32-tamper",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-esp32-tamper-m" },
+              "tail": { "$ref": "av-esp32" },
+              "head": { "$ref": "ucv-tamper" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-esp32-publier",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-esp32-publier-m" },
+              "tail": { "$ref": "av-esp32" },
+              "head": { "$ref": "ucv-publier" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-esp32-cmd",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-esp32-cmd-m" },
+              "tail": { "$ref": "av-esp32" },
+              "head": { "$ref": "ucv-cmd" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-hivemq-publier",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-hivemq-publier-m" },
+              "tail": { "$ref": "av-hivemq" },
+              "head": { "$ref": "ucv-publier" }
+            },
+            {
+              "_type": "UMLAssociationView",
+              "_id": "assoc-hivemq-cmd",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "assoc-hivemq-cmd-m" },
+              "tail": { "$ref": "av-hivemq" },
+              "head": { "$ref": "ucv-cmd" }
+            },
+
+            {
+              "_type": "UMLGeneralizationView",
+              "_id": "gen-admin-proprio-view",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "gen-admin-proprio" },
+              "tail": { "$ref": "av-admin" },
+              "head": { "$ref": "av-proprio" }
+            },
+
+            {
+              "_type": "UMLIncludeView",
+              "_id": "inc-dashboard-auth-view",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "inc-dashboard-auth" },
+              "tail": { "$ref": "ucv-dashboard" },
+              "head": { "$ref": "ucv-auth" }
+            },
+            {
+              "_type": "UMLIncludeView",
+              "_id": "inc-alarme-auth-view",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "inc-alarme-auth" },
+              "tail": { "$ref": "ucv-alarme" },
+              "head": { "$ref": "ucv-auth" }
+            },
+            {
+              "_type": "UMLIncludeView",
+              "_id": "inc-chute-collecter-view",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "inc-chute-collecter" },
+              "tail": { "$ref": "ucv-chute" },
+              "head": { "$ref": "ucv-collecter" }
+            },
+            {
+              "_type": "UMLIncludeView",
+              "_id": "inc-tamper-collecter-view",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "inc-tamper-collecter" },
+              "tail": { "$ref": "ucv-tamper" },
+              "head": { "$ref": "ucv-collecter" }
+            },
+
+            {
+              "_type": "UMLExtendView",
+              "_id": "ext-archiver-alertes-view",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "ext-archiver-alertes" },
+              "tail": { "$ref": "ucv-archiver" },
+              "head": { "$ref": "ucv-alertes" }
+            },
+            {
+              "_type": "UMLExtendView",
+              "_id": "ext-cmd-alarme-view",
+              "_parent": { "$ref": "ucd-main" },
+              "model": { "$ref": "ext-cmd-alarme" },
+              "tail": { "$ref": "ucv-cmd" },
+              "head": { "$ref": "ucv-alarme" }
+            }
+          ]
+        }
+      ],
+
+      "ownedElements": [
+        {
+          "_type": "UMLSubject",
+          "_id": "sub-system",
+          "name": "Systeme EVE Mobility"
+        },
+
+        {
+          "_type": "UMLActor",
+          "_id": "ac-proprio",
+          "name": "Proprietaire",
+          "documentation": "Operateur EVE Mobility - utilisateur final de l'application mobile"
+        },
+        {
+          "_type": "UMLActor",
+          "_id": "ac-admin",
+          "name": "Administrateur",
+          "documentation": "Gestion des comptes, scooters et supervision globale"
+        },
+        {
+          "_type": "UMLActor",
+          "_id": "ac-esp32",
+          "name": "ESP32",
+          "stereotype": "system",
+          "documentation": "Systeme embarque - collecte et publie la telemetrie"
+        },
+        {
+          "_type": "UMLActor",
+          "_id": "ac-hivemq",
+          "name": "HiveMQ Cloud",
+          "stereotype": "system",
+          "documentation": "Broker MQTT - distribue les messages entre ESP32 et App"
+        },
+
+        { "_type": "UMLUseCase", "_id": "uc-auth",        "name": "S'authentifier" },
+        { "_type": "UMLUseCase", "_id": "uc-dashboard",   "name": "Consulter le dashboard" },
+        { "_type": "UMLUseCase", "_id": "uc-batteries",   "name": "Surveiller les batteries" },
+        { "_type": "UMLUseCase", "_id": "uc-tpms",        "name": "Surveiller les pneus (TPMS)" },
+        { "_type": "UMLUseCase", "_id": "uc-alertes",     "name": "Consulter les alertes" },
+        { "_type": "UMLUseCase", "_id": "uc-archiver",    "name": "Archiver une alerte" },
+        { "_type": "UMLUseCase", "_id": "uc-alarme",      "name": "Activer/Desactiver l'alarme" },
+        { "_type": "UMLUseCase", "_id": "uc-seuil-chute", "name": "Configurer seuil de chute" },
+        { "_type": "UMLUseCase", "_id": "uc-seuil-tpms",  "name": "Configurer seuil TPMS" },
+        { "_type": "UMLUseCase", "_id": "uc-inviter",     "name": "Inviter un utilisateur" },
+        { "_type": "UMLUseCase", "_id": "uc-approuver",   "name": "Approuver un compte" },
+        { "_type": "UMLUseCase", "_id": "uc-scooter",     "name": "Ajouter un scooter" },
+        { "_type": "UMLUseCase", "_id": "uc-stock-bat",   "name": "Gerer stock batteries" },
+        { "_type": "UMLUseCase", "_id": "uc-stock-tpms",  "name": "Gerer stock TPMS" },
+        { "_type": "UMLUseCase", "_id": "uc-collecter",   "name": "Collecter donnees capteurs" },
+        { "_type": "UMLUseCase", "_id": "uc-chute",       "name": "Detecter une chute" },
+        { "_type": "UMLUseCase", "_id": "uc-tamper",      "name": "Detecter un sabotage (tamper)" },
+        { "_type": "UMLUseCase", "_id": "uc-publier",     "name": "Publier la telemetrie MQTT" },
+        { "_type": "UMLUseCase", "_id": "uc-cmd",         "name": "Recevoir commande alarme" },
+
+        {
+          "_type": "UMLGeneralization",
+          "_id": "gen-admin-proprio",
+          "source": { "$ref": "ac-admin" },
+          "target": { "$ref": "ac-proprio" }
+        },
+
+        {
+          "_type": "UMLAssociation", "_id": "assoc-proprio-auth-m",
+          "end1": { "reference": { "$ref": "ac-proprio" } },
+          "end2": { "reference": { "$ref": "uc-auth" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-proprio-dashboard-m",
+          "end1": { "reference": { "$ref": "ac-proprio" } },
+          "end2": { "reference": { "$ref": "uc-dashboard" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-proprio-batteries-m",
+          "end1": { "reference": { "$ref": "ac-proprio" } },
+          "end2": { "reference": { "$ref": "uc-batteries" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-proprio-tpms-m",
+          "end1": { "reference": { "$ref": "ac-proprio" } },
+          "end2": { "reference": { "$ref": "uc-tpms" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-proprio-alertes-m",
+          "end1": { "reference": { "$ref": "ac-proprio" } },
+          "end2": { "reference": { "$ref": "uc-alertes" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-proprio-alarme-m",
+          "end1": { "reference": { "$ref": "ac-proprio" } },
+          "end2": { "reference": { "$ref": "uc-alarme" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-proprio-seuil-chute-m",
+          "end1": { "reference": { "$ref": "ac-proprio" } },
+          "end2": { "reference": { "$ref": "uc-seuil-chute" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-proprio-seuil-tpms-m",
+          "end1": { "reference": { "$ref": "ac-proprio" } },
+          "end2": { "reference": { "$ref": "uc-seuil-tpms" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-admin-inviter-m",
+          "end1": { "reference": { "$ref": "ac-admin" } },
+          "end2": { "reference": { "$ref": "uc-inviter" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-admin-approuver-m",
+          "end1": { "reference": { "$ref": "ac-admin" } },
+          "end2": { "reference": { "$ref": "uc-approuver" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-admin-scooter-m",
+          "end1": { "reference": { "$ref": "ac-admin" } },
+          "end2": { "reference": { "$ref": "uc-scooter" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-admin-stock-bat-m",
+          "end1": { "reference": { "$ref": "ac-admin" } },
+          "end2": { "reference": { "$ref": "uc-stock-bat" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-admin-stock-tpms-m",
+          "end1": { "reference": { "$ref": "ac-admin" } },
+          "end2": { "reference": { "$ref": "uc-stock-tpms" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-esp32-collecter-m",
+          "end1": { "reference": { "$ref": "ac-esp32" } },
+          "end2": { "reference": { "$ref": "uc-collecter" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-esp32-chute-m",
+          "end1": { "reference": { "$ref": "ac-esp32" } },
+          "end2": { "reference": { "$ref": "uc-chute" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-esp32-tamper-m",
+          "end1": { "reference": { "$ref": "ac-esp32" } },
+          "end2": { "reference": { "$ref": "uc-tamper" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-esp32-publier-m",
+          "end1": { "reference": { "$ref": "ac-esp32" } },
+          "end2": { "reference": { "$ref": "uc-publier" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-esp32-cmd-m",
+          "end1": { "reference": { "$ref": "ac-esp32" } },
+          "end2": { "reference": { "$ref": "uc-cmd" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-hivemq-publier-m",
+          "end1": { "reference": { "$ref": "ac-hivemq" } },
+          "end2": { "reference": { "$ref": "uc-publier" } }
+        },
+        {
+          "_type": "UMLAssociation", "_id": "assoc-hivemq-cmd-m",
+          "end1": { "reference": { "$ref": "ac-hivemq" } },
+          "end2": { "reference": { "$ref": "uc-cmd" } }
+        },
+
+        {
+          "_type": "UMLInclude",
+          "_id": "inc-dashboard-auth",
+          "source": { "$ref": "uc-dashboard" },
+          "target": { "$ref": "uc-auth" }
+        },
+        {
+          "_type": "UMLInclude",
+          "_id": "inc-alarme-auth",
+          "source": { "$ref": "uc-alarme" },
+          "target": { "$ref": "uc-auth" }
+        },
+        {
+          "_type": "UMLInclude",
+          "_id": "inc-chute-collecter",
+          "source": { "$ref": "uc-chute" },
+          "target": { "$ref": "uc-collecter" }
+        },
+        {
+          "_type": "UMLInclude",
+          "_id": "inc-tamper-collecter",
+          "source": { "$ref": "uc-tamper" },
+          "target": { "$ref": "uc-collecter" }
+        },
+
+        {
+          "_type": "UMLExtend",
+          "_id": "ext-archiver-alertes",
+          "source": { "$ref": "uc-archiver" },
+          "target": { "$ref": "uc-alertes" }
+        },
+        {
+          "_type": "UMLExtend",
+          "_id": "ext-cmd-alarme",
+          "source": { "$ref": "uc-cmd" },
+          "target": { "$ref": "uc-alarme" }
+        }
+      ]
+    }
+  ]
+}

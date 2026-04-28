@@ -13,6 +13,7 @@ const TYPE_CONFIG = {
   battery_low: { icon: '🔋', color: C.warning,     label: 'Batterie'  },
   tpms:        { icon: '🛞', color: C.warning,     label: 'TPMS'      },
   alarm:       { icon: '🔔', color: C.accentBright, label: 'Alarme'   },
+  alarm_siren: { icon: '🚨', color: C.danger,       label: 'Sirène'   },
 };
 
 function formatDate(dateStr) {
