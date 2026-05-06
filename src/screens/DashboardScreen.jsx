@@ -6,6 +6,7 @@ import {
   StatusBar, Platform, Modal,
   KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AttentionModal from '../components/AttentionModal';
 import { mqttManager } from '../lib/mqttManager';  // ✅ ONLY import mqttManager
 
@@ -345,13 +346,34 @@ export default function DashboardScreen({ route, navigation }) {
   const [tpmsSensors,  setTpmsSensors]  = useState([]);
   const [telemetry,    setTelemetry]    = useState(null);
   const [attention,    setAttention]    = useState({ visible: false, label: '', action: null });
-  
+  const [fallThreshold, setFallThreshold] = useState(55);
+
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
   // Refs pour éviter les appels simultanés
   const fetchingBattRef = useRef(false);
   const fetchingTelRef  = useRef(false);
   const fetchingTpmsRef = useRef(false);
+  // Ref toujours a jour pour acces synchrone dans le handler MQTT
+  const fallThresholdRef = useRef(55);
+
+  // Charge le seuil depuis AsyncStorage et le re-charge quand on revient sur l'ecran
+  const loadFallThreshold = async () => {
+    try {
+      const json = await AsyncStorage.getItem('settings_notif_gyroscope');
+      const seuil = json ? parseFloat(JSON.parse(json)?.seuil) : NaN;
+      const v = Number.isFinite(seuil) && seuil > 0 ? seuil : 55;
+      setFallThreshold(v);
+      fallThresholdRef.current = v;
+    } catch {}
+  };
+  useEffect(() => { loadFallThreshold(); }, []);
+  // Re-load le seuil chaque fois qu'on revient sur l'ecran (apres Parametres)
+  useEffect(() => {
+    if (!navigation?.addListener) return;
+    const unsub = navigation.addListener('focus', loadFallThreshold);
+    return unsub;
+  }, [navigation]);
 
   const fetchBatteries = async () => {
     if (!scooter?.id || fetchingBattRef.current) return;
@@ -484,7 +506,7 @@ export default function DashboardScreen({ route, navigation }) {
       if (payload.type === 'gyro' || payload.fallen !== undefined
           || payload.accel !== undefined || payload.accel_x !== undefined) {
         setTelemetry(prev => {
-          const threshold = 55;
+          const threshold = fallThresholdRef.current ?? 55;
           const ax = payload.accel_x ?? payload.accel ?? prev?.accel_x;
           const hasAccelData = payload.accel !== undefined || payload.accel_x !== undefined;
           const newFallen = hasAccelData
@@ -684,7 +706,7 @@ export default function DashboardScreen({ route, navigation }) {
                 <Text style={{ fontSize: 22, fontWeight: '900', color: C.white }}>
                   {value != null ? `${value.toFixed(0)}°` : '—'}
                 </Text>
-                <Text style={{ fontSize: 9, color: C.textMuted }}>Seuil : 55</Text>
+                <Text style={{ fontSize: 9, color: C.textMuted }}>Seuil : {fallThreshold}</Text>
               </View>
             );
           })()}

@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
 import { C } from '../constants';
+import { Image } from 'react-native';
 
 // ─── Erreurs Supabase → message lisible ───────────────────
 function parseError(msg) {
@@ -136,7 +137,11 @@ export default function AuthScreen() {
                 shadowColor: C.accent, shadowOffset: { width: 0, height: 8 },
                 shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
               }}>
-                <Text style={{ fontSize: 38 }}>🛵</Text>
+                <Image
+                  source={require('../../assets/eve-logo.png')}
+                  style={{ width: 56, height: 56 }}
+                  resizeMode="contain"
+                />
               </View>
               <Text style={{ fontSize: 9, letterSpacing: 4, color: C.accent, textTransform: 'uppercase' }}>
                 EVE MOBILITY
@@ -181,14 +186,14 @@ export default function AuthScreen() {
               )}
 
               {/* Email */}
-              <Field label="Adresse email" icon="✉️"
+              <Field label="Adresse email" 
                 value={email} onChangeText={v => { setEmail(v); setErrors(e => ({...e, email: null})); setGlobalError(''); }}
                 placeholder="vous@exemple.com" keyboardType="email-address"
                 error={errors.email}
               />
 
               {/* Mot de passe */}
-              <Field label="Mot de passe" icon="🔑"
+              <Field label="Mot de passe" 
                 value={password} onChangeText={v => { setPassword(v); setErrors(e => ({...e, password: null})); }}
                 placeholder="••••••••"
                 secureTextEntry

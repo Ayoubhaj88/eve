@@ -190,11 +190,6 @@ function GyroscopeNotifScreen({ onBack }) {
 
         <MsgField value={s.msg} onChangeText={v => set('msg', v)} />
 
-        <Card style={{ backgroundColor: C.bgElevated }}>
-          <Text style={{ fontSize: 11, color: C.textSecondary, lineHeight: 18 }}>
-            NB: Une chute est detectee lorsque |accel_x| depasse ce seuil (defaut 55).
-          </Text>
-        </Card>
 
         <SaveButton onPress={save} loading={saving} />
       </ScrollView>
