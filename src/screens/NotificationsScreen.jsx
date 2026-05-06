@@ -101,7 +101,6 @@ export default function NotificationsScreen({ navigation }) {
 
     // Aussi charger les dernières alertes depuis telemetry (en complément)
     const { data: telData } = await supabase.from('telemetry').select('*')
-      .or('fallen.eq.true')
       .order('recorded_at', { ascending: false })
       .limit(30);
 

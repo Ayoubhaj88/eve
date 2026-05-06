@@ -5,17 +5,14 @@ import {
   Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
-import { C, STATUS, battColor, timeAgo, alertOk } from '../constants';
+import { C, STATUS, battColor, alertOk } from '../constants';
 import Sidebar from '../components/Sidebar';
 import { mqttManager } from '../lib/mqttManager';
 
-// ── Helpers ──────────────────────────────────────────────
+const FALL_THRESHOLD = 55;
 
-const normalizeScooterId = (id) => {
-  if (!id) return '';
-  const clean = String(id).trim().toLowerCase().replace(/-/g, '');
-  return clean;
-};
+const normalizeScooterId = (id) =>
+  id ? String(id).trim().toLowerCase().replace(/-/g, '') : '';
 
 // ── Indicator cell ────────────────────────────────────────
 
@@ -286,16 +283,7 @@ export default function HomeScreen({ navigation }) {
   const [showSidebar,    setShowSidebar]    = useState(false);
   const [searchText,     setSearchText]     = useState('');
 
-  // Ref pour éviter les appels simultanés
   const fetchingRef = useRef(false);
-  
-  // ✅ CRITICAL: Keep latest scooters in a ref so MQTT handler always has access
-  const scootersRef = useRef(scooters);
-  
-  // ✅ Update the ref whenever scooters change
-  useEffect(() => {
-    scootersRef.current = scooters;
-  }, [scooters]);
 
   const fetchScooters = async () => {
     if (fetchingRef.current) return;
@@ -324,7 +312,7 @@ export default function HomeScreen({ navigation }) {
           fallen: t?.fallen ?? false,
           status: t?.status ?? 'offline',
           accel_x: t?.accel_x ?? null,
-          fall_threshold: s.fall_threshold ?? 55,
+          fall_threshold: s.fall_threshold ?? FALL_THRESHOLD,
           last_update: t?.recorded_at,
           _batteries: s.batteries || [],
         };
@@ -339,86 +327,47 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // ── MQTT MESSAGE HANDLER ──
-  // ✅ Access scooters from ref, NOT from closure!
   const onMessage = (topic, message) => {
-    const text = message.toString();
-
     try {
-      const parts = topic.split('/');
-      const mqttScooterId = parts[1];
-      
-      let payload = {};
-      try {
-        payload = JSON.parse(text);
-      } catch (e) {
-        payload = { type: 'contact', value: text === '1' ? 1 : 0 };
-      }
+      const mqttScooterId = topic.split('/')[1];
 
-      // ✅ Use scootersRef.current instead of closure!
-      setScooters(current => {
-        // Verify we're using latest data
-        const latestScooters = scootersRef.current;
-        
-        return latestScooters.map(s => {
-          const dbId = normalizeScooterId(s.id);
-          const msgId = normalizeScooterId(mqttScooterId);
+      let payload;
+      try { payload = JSON.parse(message.toString()); }
+      catch { payload = { type: 'contact', value: message.toString() === '1' ? 1 : 0 }; }
 
-          if (dbId !== msgId && !dbId.includes(msgId) && !msgId.includes(dbId)) {
-            return s;
-          }
+      setScooters(current => current.map(s => {
+        const dbId = normalizeScooterId(s.id);
+        const msgId = normalizeScooterId(mqttScooterId);
+        if (dbId !== msgId && !dbId.includes(msgId) && !msgId.includes(dbId)) return s;
 
-          // ── UPDATE CONTACT SWITCH ──
-          if (payload.type === 'contact') {
-            const prevTamper = s.tamper_points ?? [false, false, false];
-            const updatedTamper = [...prevTamper];
+        if (payload.type === 'contact') {
+          const prevTamper = s.tamper_points ?? [false, false, false];
+          const updatedTamper = Array.isArray(payload.tamper_points)
+            ? payload.tamper_points
+            : [...prevTamper];
+          if (!Array.isArray(payload.tamper_points)) {
             updatedTamper[0] = payload.value === 1;
-
-            console.log(`🏠 [CONTACT] ${s.name}: ${prevTamper[0]} → ${updatedTamper[0]}`);
-
-            return {
-              ...s,
-              tamper_points: updatedTamper,
-              last_update: Date.now(),
-            };
           }
+          return { ...s, tamper_points: updatedTamper, last_update: Date.now() };
+        }
 
-          // ── UPDATE FALL DATA (single axis accel_x) ──
-          if (payload.type === 'gyro' || payload.fallen !== undefined
-              || payload.accel !== undefined || payload.accel_x !== undefined) {
-            const threshold = 55;
-            const ax = payload.accel_x ?? payload.accel ?? s.accel_x;
-            const hasAccelData = payload.accel !== undefined || payload.accel_x !== undefined;
-            const newFallen = hasAccelData
-              ? Math.abs(Number(ax) || 0) > threshold
-              : (payload.fallen !== undefined ? !!payload.fallen : s.fallen);
+        if (payload.type === 'gyro' || payload.fallen !== undefined
+            || payload.accel !== undefined || payload.accel_x !== undefined) {
+          const ax = payload.accel_x ?? payload.accel ?? s.accel_x;
+          const hasAccelData = payload.accel !== undefined || payload.accel_x !== undefined;
+          const newFallen = hasAccelData
+            ? Math.abs(Number(ax) || 0) > FALL_THRESHOLD
+            : (payload.fallen !== undefined ? !!payload.fallen : s.fallen);
+          return { ...s, fallen: newFallen, accel_x: ax, last_update: Date.now() };
+        }
 
-            console.log(`🏠 [FALL] ${s.name}: ${s.fallen} → ${newFallen} (x=${ax} seuil=${threshold})`);
-
-            return {
-              ...s,
-              fallen: newFallen,
-              accel_x: ax,
-              last_update: Date.now(),
-            };
-          }
-
-          return s;
-        });
-      });
-    } catch (e) {
-      console.log("Erreur Parsing MQTT HomeScreen:", e);
-    }
+        return s;
+      }));
+    } catch {}
   };
 
-  // ✅ Setup MQTT on mount, keep it active forever
   useEffect(() => {
-    console.log("🏠 HomeScreen mounted - setting up MQTT");
-    
-    // Subscribe to bus
     mqttManager.updateCallback(onMessage);
-    
-    // Load initial data
     fetchScooters();
     supabase.auth.getUser().then(({ data }) => setUserEmail(data?.user?.email ?? ''));
 
@@ -449,12 +398,10 @@ export default function HomeScreen({ navigation }) {
       })
       .subscribe();
 
-    // Empty cleanup - don't kill the bus!
     return () => {
-      console.log("🏠 HomeScreen unmounted (bus stays active)");
       supabase.removeChannel(battCh);
     };
-  }, []);  // ✅ Only on mount/unmount!
+  }, []);
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -527,7 +474,7 @@ export default function HomeScreen({ navigation }) {
                 <TextInput
                   value={searchText}
                   onChangeText={setSearchText}
-                  placeholder="Hinted search text"
+                  placeholder="Rechercher un scooter"
                   placeholderTextColor={C.textMuted}
                   style={{ flex: 1, color: C.white, fontSize: 14 }}
                 />

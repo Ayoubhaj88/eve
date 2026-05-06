@@ -20,16 +20,12 @@ Notifications.setNotificationHandler({
 // ── Demander permission ──────────────────────────────────────
 
 export async function requestPermissions() {
-  if (!Device.isDevice) {
-    console.log('[NOTIF] not a real device — permissions skipped');
-    return false;
-  }
+  if (!Device.isDevice) return false;
   let { status } = await Notifications.getPermissionsAsync();
   if (status !== 'granted') {
     const r = await Notifications.requestPermissionsAsync();
     status = r.status;
   }
-  console.log(`[NOTIF] permission status: ${status}`);
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('alerts', {
       name: 'Alertes Scooter',
@@ -52,10 +48,7 @@ export async function registerPushToken() {
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ??
       Constants?.easConfig?.projectId;
-    if (!projectId) {
-      console.log('[push] projectId manquant dans app.json');
-      return;
-    }
+    if (!projectId) return;
 
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData?.data;
@@ -64,8 +57,7 @@ export async function registerPushToken() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Upsert : un seul row par token
-    const { error } = await supabase.from('push_tokens').upsert(
+    await supabase.from('push_tokens').upsert(
       {
         user_id: user.id,
         token,
@@ -74,11 +66,7 @@ export async function registerPushToken() {
       },
       { onConflict: 'token' },
     );
-    if (error) console.log('[push] upsert token error:', error.message);
-    else console.log('[push] token enregistre');
-  } catch (e) {
-    console.log('[push] registerPushToken error:', e?.message);
-  }
+  } catch {}
 }
 
 // ── Envoyer notification locale ──────────────────────────────
@@ -148,21 +136,12 @@ function shouldFire(scooter_id, type) {
 // ── Trigger une alerte (notif + historique) ──────────────────
 
 async function fireAlert({ scooter_id, scooter_name, type, message, settingsKey }) {
-  if (!shouldFire(scooter_id, type)) {
-    console.log(`[NOTIF] cooldown skip ${scooter_name}/${type}`);
-    return;
-  }
+  if (!shouldFire(scooter_id, type)) return;
   const settings = await getSettings(settingsKey);
   const son = settings?.son !== false;
   const customMsg = settings?.msg?.trim() || message;
-  console.log(`[NOTIF] 🔔 fireAlert ${scooter_name} / ${type} / "${customMsg}" / son=${son}`);
   if (son) {
-    try {
-      await sendLocalNotif(scooter_name, customMsg, { scooter_id, type });
-      console.log(`[NOTIF] ✅ scheduleNotificationAsync OK`);
-    } catch (e) {
-      console.log(`[NOTIF] ❌ scheduleNotificationAsync error:`, e?.message);
-    }
+    try { await sendLocalNotif(scooter_name, customMsg, { scooter_id, type }); } catch {}
   }
   await saveToHistory({ scooter_id, scooter_name, type, message: customMsg });
 }
@@ -206,10 +185,7 @@ const mqttHandler = async (topic, message) => {
     const parts = String(topic).split('/');
     const mqttScooterId = parts[1];
     const sc = findScooterByMqttId(mqttScooterId);
-    if (!sc) {
-      console.log(`[NOTIF] mqtt no match for ${mqttScooterId} (known: ${Object.keys(scooterByMqttId).join(',')})`);
-      return;
-    }
+    if (!sc) return;
 
     const text = message.toString();
     let payload;
@@ -250,19 +226,25 @@ const mqttHandler = async (topic, message) => {
     }
 
     // ── SABOTAGE (contact switch) ──
-    if (payload.type === 'contact' && payload.value === 1) {
-      fireAlert({
-        scooter_id: sc.id,
-        scooter_name: sc.name,
-        type: 'tamper',
-        title: 'Sabotage',
-        message: 'Sabotage détecté : Siège',
-        settingsKey: 'notif_sabotage',
-      });
+    if (payload.type === 'contact') {
+      const points = Array.isArray(payload.tamper_points)
+        ? payload.tamper_points
+        : (payload.value === 1 ? [true, false, false] : [false, false, false]);
+      const labels = ['Siège', 'Avant', 'Batterie'];
+      const triggered = points
+        .map((on, i) => on ? labels[i] : null)
+        .filter(Boolean);
+      if (triggered.length > 0) {
+        fireAlert({
+          scooter_id: sc.id,
+          scooter_name: sc.name,
+          type: 'tamper',
+          message: `Sabotage détecté : ${triggered.join(', ')}`,
+          settingsKey: 'notif_sabotage',
+        });
+      }
     }
-  } catch (e) {
-    console.log('[notifications] mqtt parse error:', e?.message);
-  }
+  } catch {}
 };
 
 // ── Détection Supabase (batterie / TPMS / alarme) ────────────
@@ -413,13 +395,10 @@ let mqttRegistered = false;
 
 export async function startNotificationListener() {
   await refreshScooters();
-  console.log(`[NOTIF] startNotificationListener — ${Object.keys(scooterByMqttId).length} scooters loaded`);
 
-  // 1. Listener MQTT (chute + sabotage) — persistant
   if (!mqttRegistered) {
     mqttManager.addPersistentListener(mqttHandler);
     mqttRegistered = true;
-    console.log(`[NOTIF] persistent MQTT listener registered`);
   }
 
   // 2. Listener Supabase telemetry (batterie / TPMS / alarme)

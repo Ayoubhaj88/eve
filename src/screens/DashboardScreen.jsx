@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { C, STATUS, battColor, timeAgo, alertOk } from '../constants';
+import { C, STATUS, battColor, alertOk } from '../constants';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, Modal,
@@ -8,17 +8,13 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AttentionModal from '../components/AttentionModal';
-import { mqttManager } from '../lib/mqttManager';  // ✅ ONLY import mqttManager
+import { mqttManager } from '../lib/mqttManager';
 
 const MAX_BATTERIES = 3;
+const FALL_THRESHOLD = 55;
 
-// Helper function to normalize scooter ID (matching HomeScreen)
-const normalizeScooterId = (id) => {
-  if (!id) return '';
-  return String(id).trim().toLowerCase().replace(/-/g, '');  // ✅ Remove dashes!
-};
-
-// ── Section header ──────────────────────────────────────────
+const normalizeScooterId = (id) =>
+  id ? String(id).trim().toLowerCase().replace(/-/g, '') : '';
 
 function SectionTitle({ title }) {
   return (
@@ -30,8 +26,6 @@ function SectionTitle({ title }) {
     </Text>
   );
 }
-
-// ── Modal assigner batterie depuis stock ────────────────────
 
 function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots }) {
   const [stockBatteries, setStockBatteries] = useState([]);
@@ -154,112 +148,6 @@ function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots })
   );
 }
 
-// ── Modal assigner TPMS depuis stock ────────────────────────
-
-function TpmsPickerModal({ visible, onClose, onSaved, scooterId, wheel }) {
-  const [stockSensors, setStockSensors] = useState([]);
-  const [selectedId,   setSelectedId]   = useState(null);
-  const [loading,      setLoading]      = useState(false);
-  const [fetching,     setFetching]     = useState(true);
-
-  useEffect(() => {
-    if (!visible) return;
-    setSelectedId(null);
-    setFetching(true);
-    supabase.from('tpms_sensors').select('*')
-      .is('scooter_id', null)
-      .eq('wheel_position', wheel)
-      .order('sensor_id')
-      .then(({ data, error }) => {
-        if (error) { console.log('tpms_sensors:', error.message); setStockSensors([]); }
-        else setStockSensors(data ?? []);
-        setFetching(false);
-      });
-  }, [visible, wheel]);
-
-  const assign = async () => {
-    if (!selectedId) { alertOk('Erreur', 'Sélectionnez un capteur.'); return; }
-    setLoading(true);
-    try {
-      const { error } = await supabase.from('tpms_sensors')
-        .update({ scooter_id: scooterId })
-        .eq('id', selectedId);
-      if (error) throw error;
-      onSaved(); onClose();
-    } catch (e) { alertOk('Erreur', e.message); }
-    finally     { setLoading(false); }
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onClose} />
-        <View style={{
-          backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24, maxHeight: '70%',
-        }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.bgElevated, alignSelf: 'center', marginBottom: 20 }} />
-          <Text style={{ fontSize: 20, fontWeight: '900', color: C.white, marginBottom: 16, textAlign: 'center' }}>
-            Assigner TPMS {wheel}.
-          </Text>
-
-          <Text style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-            Capteurs {wheel} en stock ({stockSensors.length})
-          </Text>
-
-          {fetching ? (
-            <ActivityIndicator color={C.accent} style={{ marginVertical: 20 }} />
-          ) : stockSensors.length === 0 ? (
-            <View style={{ backgroundColor: C.bgElevated, borderRadius: 14, padding: 24, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: C.border }}>
-              <Text style={{ fontSize: 28, marginBottom: 8 }}>⚙️</Text>
-              <Text style={{ fontSize: 13, color: C.textMuted, textAlign: 'center' }}>
-                Aucun capteur TPMS {wheel} en stock.{'\n'}Ajoutez-en via ☰ → Ajouter TPMS
-              </Text>
-            </View>
-          ) : (
-            <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
-              {stockSensors.map(s => {
-                const selected = selectedId === s.id;
-                return (
-                  <TouchableOpacity key={s.id} onPress={() => setSelectedId(s.id)}
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 12,
-                      backgroundColor: selected ? C.accent + '22' : C.bgElevated,
-                      borderRadius: 12, padding: 12, marginBottom: 6,
-                      borderWidth: 2, borderColor: selected ? C.accent : C.border,
-                    }}>
-                    <Text style={{ fontSize: 22 }}>⚙️</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>TPMS {s.wheel_position}.</Text>
-                      <Text style={{ fontSize: 11, color: C.accentBright, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }}>
-                        ID: {s.sensor_id}
-                      </Text>
-                    </View>
-                    {selected && (
-                      <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center' }}>
-                        <Text style={{ color: C.white, fontSize: 14, fontWeight: '800' }}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-
-          <TouchableOpacity onPress={assign} disabled={loading || !selectedId} activeOpacity={0.8}
-            style={{ backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: 'center', opacity: (loading || !selectedId) ? 0.5 : 1 }}>
-            {loading
-              ? <ActivityIndicator color={C.white} />
-              : <Text style={{ fontSize: 16, fontWeight: '900', color: C.white }}>Assigner TPMS {wheel}.</Text>}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-// ── Battery card ────────────────────────────────────────────
-
 function BatteryCard({ item, onUnassign, onDelete }) {
   const soc       = item.soc;
   const color     = battColor(soc);
@@ -333,46 +221,35 @@ function BatteryCard({ item, onUnassign, onDelete }) {
   );
 }
 
-// ── Dashboard screen ────────────────────────────────────────
-
 export default function DashboardScreen({ route, navigation }) {
   const scooter = route.params?.scooter;
 
   const [batteries,    setBatteries]    = useState([]);
   const [battLoading,  setBattLoading]  = useState(true);
   const [showBattForm, setShowBattForm] = useState(false);
-  const [showTpmsForm, setShowTpmsForm] = useState(false);
-  const [tpmsWheel,    setTpmsWheel]    = useState('AV');
-  const [tpmsSensors,  setTpmsSensors]  = useState([]);
   const [telemetry,    setTelemetry]    = useState(null);
   const [attention,    setAttention]    = useState({ visible: false, label: '', action: null });
-  const [fallThreshold, setFallThreshold] = useState(55);
+  const [fallThreshold, setFallThreshold] = useState(FALL_THRESHOLD);
 
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
-  // Refs pour éviter les appels simultanés
   const fetchingBattRef = useRef(false);
   const fetchingTelRef  = useRef(false);
-  const fetchingTpmsRef = useRef(false);
-  // Ref toujours a jour pour acces synchrone dans le handler MQTT
-  const fallThresholdRef = useRef(55);
+  const fallThresholdRef = useRef(FALL_THRESHOLD);
 
-  // Charge le seuil depuis AsyncStorage et le re-charge quand on revient sur l'ecran
   const loadFallThreshold = async () => {
     try {
       const json = await AsyncStorage.getItem('settings_notif_gyroscope');
       const seuil = json ? parseFloat(JSON.parse(json)?.seuil) : NaN;
-      const v = Number.isFinite(seuil) && seuil > 0 ? seuil : 55;
+      const v = Number.isFinite(seuil) && seuil > 0 ? seuil : FALL_THRESHOLD;
       setFallThreshold(v);
       fallThresholdRef.current = v;
     } catch {}
   };
   useEffect(() => { loadFallThreshold(); }, []);
-  // Re-load le seuil chaque fois qu'on revient sur l'ecran (apres Parametres)
   useEffect(() => {
     if (!navigation?.addListener) return;
-    const unsub = navigation.addListener('focus', loadFallThreshold);
-    return unsub;
+    return navigation.addListener('focus', loadFallThreshold);
   }, [navigation]);
 
   const fetchBatteries = async () => {
@@ -401,27 +278,7 @@ export default function DashboardScreen({ route, navigation }) {
     }
   };
 
-  const fetchTpms = async () => {
-    if (!scooter?.id || fetchingTpmsRef.current) return;
-    fetchingTpmsRef.current = true;
-    try {
-      const { data } = await supabase.from('tpms_sensors').select('*')
-        .eq('scooter_id', scooter.id);
-      setTpmsSensors(data ?? []);
-    } finally {
-      fetchingTpmsRef.current = false;
-    }
-  };
-
-  // Fetch toutes les données en parallèle
-  const fetchAll = () => {
-    fetchBatteries();
-    fetchTelemetry();
-    fetchTpms();
-  };
-
-  const tpmsFront = tpmsSensors.find(t => t.wheel_position === 'AV');
-  const tpmsRear  = tpmsSensors.find(t => t.wheel_position === 'AR');
+  const fetchAll = () => { fetchBatteries(); fetchTelemetry(); };
 
   const unassignBattery = (item) => {
     setAttention({
@@ -462,102 +319,59 @@ export default function DashboardScreen({ route, navigation }) {
     });
   };
 
-  // ── MQTT MESSAGE HANDLER ──
   const onMqttMessage = (topic, message) => {
-    const text = message.toString();
-
     try {
-      const parts = topic.split('/');
-      const mqttScooterId = parts[1];
-      
+      const mqttScooterId = topic.split('/')[1];
       const dbId = normalizeScooterId(scooter.id);
       const msgId = normalizeScooterId(mqttScooterId);
+      if (dbId !== msgId && !dbId.includes(msgId) && !msgId.includes(dbId)) return;
 
-      // ✅ CORRECT ID comparison (matching HomeScreen)
-      if (dbId !== msgId && !dbId.includes(msgId) && !msgId.includes(dbId)) {
-        return;
-      }
+      let payload;
+      try { payload = JSON.parse(message.toString()); }
+      catch { payload = { type: 'contact', value: message.toString() === '1' ? 1 : 0 }; }
 
-      // Try to parse as JSON (new format)
-      let payload = {};
-      try {
-        payload = JSON.parse(text);
-      } catch (e) {
-        // Fallback: treat as simple "1" or "0" for contact switch
-        payload = { type: 'contact', value: text === '1' ? 1 : 0 };
-      }
-
-      // ── UPDATE CONTACT SWITCH ──
       if (payload.type === 'contact') {
         setTelemetry(prev => {
           const prevTamper = prev?.tamper_points ?? [false, false, false];
-          const updatedTamper = [...prevTamper];
-          updatedTamper[0] = payload.value === 1;
-
-          return {
-            ...prev,
-            tamper_points: updatedTamper,
-            recorded_at: new Date().toISOString(),
-          };
+          const updatedTamper = Array.isArray(payload.tamper_points)
+            ? payload.tamper_points
+            : [...prevTamper];
+          if (!Array.isArray(payload.tamper_points)) {
+            updatedTamper[0] = payload.value === 1;
+          }
+          return { ...prev, tamper_points: updatedTamper, recorded_at: new Date().toISOString() };
         });
       }
 
-      // ── UPDATE FALL DATA (single axis accel_x) ──
       if (payload.type === 'gyro' || payload.fallen !== undefined
           || payload.accel !== undefined || payload.accel_x !== undefined) {
         setTelemetry(prev => {
-          const threshold = fallThresholdRef.current ?? 55;
           const ax = payload.accel_x ?? payload.accel ?? prev?.accel_x;
           const hasAccelData = payload.accel !== undefined || payload.accel_x !== undefined;
           const newFallen = hasAccelData
-            ? Math.abs(Number(ax) || 0) > threshold
+            ? Math.abs(Number(ax) || 0) > fallThresholdRef.current
             : (payload.fallen !== undefined ? !!payload.fallen : prev?.fallen);
-
-          console.log(`📊 [FALL] ${scooter?.name}: ${prev?.fallen} → ${newFallen} (x=${ax} seuil=${threshold})`);
-
-          return {
-            ...prev,
-            fallen: newFallen,
-            accel_x: ax,
-            recorded_at: new Date().toISOString(),
-          };
+          return { ...prev, fallen: newFallen, accel_x: ax, recorded_at: new Date().toISOString() };
         });
       }
-    } catch (e) {
-      // Silent error handling
-    }
+    } catch {}
   };
 
-  // ✅ CORRECT useEffect
   useEffect(() => {
     if (!scooter?.id) return;
 
-    console.log("📊 DashboardScreen mounted for:", scooter.name);
-
-    // 1. Load initial data
     fetchAll();
-
-    // 2. ✅ Update bus callback (don't kill it!)
     mqttManager.updateCallback(onMqttMessage);
 
-    // 3. Supabase realtime
     const battCh = supabase.channel('batt-' + scooter.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'batteries', filter: 'scooter_id=eq.' + scooter.id }, fetchBatteries)
-      .subscribe();
-    const tpmsCh = supabase.channel('tpms-' + scooter.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tpms_sensors', filter: 'scooter_id=eq.' + scooter.id }, fetchTpms)
       .subscribe();
 
     const interval = setInterval(fetchAll, 30000);
 
-    // ✅ Clean up ONLY non-MQTT stuff
     return () => {
-      console.log("📊 DashboardScreen unmounted (bus stays active)");
       clearInterval(interval);
       supabase.removeChannel(battCh);
-      supabase.removeChannel(tpmsCh);
-      // ✅ NO mqttClient.unsubscribe() - bus handles it!
-      // ✅ NO mqttClient.removeListener() - bus handles it!
     };
   }, [scooter?.id]);
 
@@ -582,7 +396,6 @@ export default function DashboardScreen({ route, navigation }) {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ── Header ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
           <TouchableOpacity onPress={() => navigation.goBack()}
             style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.success, justifyContent: 'center', alignItems: 'center' }}>
@@ -607,13 +420,11 @@ export default function DashboardScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* Status badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
           <Text style={{ fontSize: 13, fontWeight: '700', color: sc.color }}>{sc.label}</Text>
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: sc.color }} />
         </View>
 
-        {/* ── Batteries ── */}
         <SectionTitle title="Batteries" />
         {battLoading ? (
           <ActivityIndicator color={C.accent} style={{ marginVertical: 20 }} />
@@ -635,40 +446,37 @@ export default function DashboardScreen({ route, navigation }) {
           </TouchableOpacity>
         )}
 
-        {/* ── Points de sabotage ── */}
         <SectionTitle title="Points de sabotage" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {['Siège', 'Avant', 'Batterie'].map((label, i) => {
             const active = tamper[i] ?? false;
             return (
               <View key={label} style={{
-                flex: 1, 
-                backgroundColor: active ? '#3A0A14' : '#0A2A14', 
+                flex: 1,
+                backgroundColor: active ? '#3A0A14' : '#0A2A14',
                 borderRadius: 12,
                 padding: 12, alignItems: 'center', gap: 6,
-                borderWidth: 1.5, 
+                borderWidth: 1.5,
                 borderColor: active ? C.danger + '55' : C.success + '55',
               }}>
                 <Text style={{ fontSize: 22 }}>{active ? '⚠️' : '✅'}</Text>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: active ? C.danger : C.success }}>
                   {label}
                 </Text>
-                <View style={{ 
-                  width: 8, height: 8, borderRadius: 4, 
-                  backgroundColor: active ? C.danger : C.success 
+                <View style={{
+                  width: 8, height: 8, borderRadius: 4,
+                  backgroundColor: active ? C.danger : C.success
                 }} />
               </View>
             );
           })}
         </View>
 
-        {/* ── Controle R.C ── */}
         <SectionTitle title="Controle R.C" />
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {[
             { label: 'Activer',    action: "Activer l'alarme"    },
             { label: 'Désactiver', action: "Désactiver l'alarme" },
-            { label: 'Env.',       action: 'Envoyer commande'    },
             { label: 'Marche M.',  action: 'Démarrer le scooter' },
             { label: 'Arrêter M.', action: 'Arrêter le scooter'  },
           ].map(({ label, action }) => (
@@ -686,12 +494,10 @@ export default function DashboardScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* ── Gyroscope ── */}
         <SectionTitle title="Gyroscope" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {(() => {
-            const value = accelX;
-            const isFall = value != null && Math.abs(value) > 55;
+            const isFall = accelX != null && Math.abs(accelX) > fallThreshold;
             const bg    = isFall ? '#5C1A1A' : '#1A3A1A';
             const color = isFall ? '#FF6B6B' : '#51CF66';
             return (
@@ -704,7 +510,7 @@ export default function DashboardScreen({ route, navigation }) {
                   Droite/Gauche
                 </Text>
                 <Text style={{ fontSize: 22, fontWeight: '900', color: C.white }}>
-                  {value != null ? `${value.toFixed(0)}°` : '—'}
+                  {accelX != null ? `${accelX.toFixed(0)}°` : '—'}
                 </Text>
                 <Text style={{ fontSize: 9, color: C.textMuted }}>Seuil : {fallThreshold}</Text>
               </View>
@@ -712,7 +518,6 @@ export default function DashboardScreen({ route, navigation }) {
           })()}
         </View>
 
-        {/* ── TPMS (indisponible) ── */}
         <SectionTitle title="TPMS" />
         <View style={{
           backgroundColor: C.bgCard, borderRadius: 14,
@@ -737,14 +542,6 @@ export default function DashboardScreen({ route, navigation }) {
         onSaved={fetchBatteries}
         scooterId={scooter?.id}
         usedSlots={usedSlots}
-      />
-
-      <TpmsPickerModal
-        visible={showTpmsForm}
-        onClose={() => setShowTpmsForm(false)}
-        onSaved={fetchTpms}
-        scooterId={scooter?.id}
-        wheel={tpmsWheel}
       />
 
       <AttentionModal
