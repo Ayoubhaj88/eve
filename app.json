@@ -22,7 +22,12 @@
       },
       "edgeToEdgeEnabled": true,
       "useNextNotificationsApi": true,
-      "permissions": ["NOTIFICATIONS", "VIBRATE", "WAKE_LOCK"]
+      "permissions": [
+        "NOTIFICATIONS",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ],
+      "package": "com.ayoubhajsorganization.evemobility"
     },
     "plugins": [
       [
