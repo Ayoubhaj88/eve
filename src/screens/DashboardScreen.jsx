@@ -230,12 +230,20 @@ export default function DashboardScreen({ route, navigation }) {
   const [telemetry,    setTelemetry]    = useState(null);
   const [attention,    setAttention]    = useState({ visible: false, label: '', action: null });
   const [fallThreshold, setFallThreshold] = useState(FALL_THRESHOLD);
+  const [lastRfAck,    setLastRfAck]    = useState(null);
 
   const usedSlots = batteries.map(b => b.slot).filter(Boolean);
 
   const fetchingBattRef = useRef(false);
   const fetchingTelRef  = useRef(false);
   const fallThresholdRef = useRef(FALL_THRESHOLD);
+
+  // Helper to get the MQTT scooter ID (short form from the UUID)
+  const getMqttScooterId = () => {
+    if (!scooter?.id) return '';
+    // Use first 8 chars of UUID without dashes, matching your ESP32 topic
+    return normalizeScooterId(scooter.id).substring(0, 8);
+  };
 
   const loadFallThreshold = async () => {
     try {
@@ -307,6 +315,19 @@ export default function DashboardScreen({ route, navigation }) {
 
   const showAtt = (label, action) => setAttention({ visible: true, label, action });
 
+  // ── RF Command sender ──────────────────────────────────────
+  const sendRfCommand = (action, label) => {
+    setAttention({
+      visible: true,
+      label: `${label} ?`,
+      action: () => {
+        const mqttId = getMqttScooterId();
+        mqttManager.sendCommand(mqttId, action);
+        alertOk('Envoyé', `Commande "${label}" envoyée`);
+      },
+    });
+  };
+
   const deleteScooter = () => {
     setAttention({
       visible: true,
@@ -329,6 +350,11 @@ export default function DashboardScreen({ route, navigation }) {
       let payload;
       try { payload = JSON.parse(message.toString()); }
       catch { payload = { type: 'contact', value: message.toString() === '1' ? 1 : 0 }; }
+
+      if (payload.type === 'rf_ack') {
+        setLastRfAck(payload);
+        return;
+      }
 
       if (payload.type === 'contact') {
         setTelemetry(prev => {
@@ -475,19 +501,20 @@ export default function DashboardScreen({ route, navigation }) {
         <SectionTitle title="Controle R.C" />
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {[
-            { label: 'Activer',    action: "Activer l'alarme"    },
-            { label: 'Désactiver', action: "Désactiver l'alarme" },
-            { label: 'Marche M.',  action: 'Démarrer le scooter' },
-            { label: 'Arrêter M.', action: 'Arrêter le scooter'  },
-          ].map(({ label, action }) => (
-            <TouchableOpacity key={label}
-              onPress={() => showAtt(action, () => alertOk('Info', `${action} envoyé`))}
+            { label: 'Verrouiller',   emoji: '🔒', action: 'lock',    confirm: "Verrouiller le scooter"    },
+            { label: 'Déverrouiller', emoji: '🔓', action: 'unlock',  confirm: "Déverrouiller le scooter"  },
+            { label: 'Klaxon',        emoji: '🔔', action: 'bell',    confirm: "Activer le klaxon"         },
+            { label: 'Tonnerre',      emoji: '⚡', action: 'thunder', confirm: "Activer le tonnerre"       },
+          ].map(({ label, emoji, action, confirm }) => (
+            <TouchableOpacity key={action}
+              onPress={() => sendRfCommand(action, confirm)}
               style={{
                 flex: 1, backgroundColor: C.bgElevated, borderRadius: 12,
-                paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', gap: 5,
+                paddingVertical: 12, paddingHorizontal: 4, alignItems: 'center', gap: 6,
                 borderWidth: 1, borderColor: C.border,
               }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: C.white, textAlign: 'center' }} numberOfLines={2}>
+              <Text style={{ fontSize: 22 }}>{emoji}</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: C.white, textAlign: 'center' }} numberOfLines={2}>
                 {label}
               </Text>
             </TouchableOpacity>
