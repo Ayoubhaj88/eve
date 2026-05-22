@@ -291,19 +291,25 @@ export default function HomeScreen({ navigation }) {
     try {
       const { data: scooterData, error } = await supabase
         .from('scooters')
-        .select('*, batteries(id, serial_number, slot, soc)');
+        .select('*, batteries(id, serial_number, num_bt, slot, soc)');
 
-      if (error) throw error;
+      if (error) { console.error('❌ HomeScreen scooters query error:', error); throw error; }
+      console.log('✅ HomeScreen scooters:', scooterData?.length, 'scooters loaded');
+      (scooterData || []).forEach(s => {
+        console.log(`   🛵 ${s.name} → batteries:`, s.batteries?.length ?? 0, JSON.stringify(s.batteries));
+      });
 
       // Fetch telemetry par scooter (en parallele)
       const enriched = await Promise.all((scooterData || []).map(async (s) => {
-        const { data: t } = await supabase
+        const { data: t, error: tErr } = await supabase
           .from('telemetry')
           .select('tamper_points, alarm, fallen, status, accel_x, recorded_at')
           .eq('scooter_id', s.id)
           .order('recorded_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        if (tErr) console.error(`❌ Telemetry error for ${s.name}:`, tErr);
 
         return {
           ...s,
@@ -320,7 +326,7 @@ export default function HomeScreen({ navigation }) {
 
       setScooters(enriched);
     } catch (e) {
-      console.error('Erreur Fetch HomeScreen:', e.message);
+      console.error('❌ Erreur Fetch HomeScreen:', e.message);
     } finally {
       fetchingRef.current = false;
       setLoading(false);

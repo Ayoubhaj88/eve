@@ -121,6 +121,9 @@ function BatteryPickerModal({ visible, onClose, onSaved, scooterId, usedSlots })
                     <Text style={{ fontSize: 22 }}>🔋</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>{b.serial_number}</Text>
+                      {b.num_bt ? (
+                        <Text style={{ fontSize: 10, color: C.accentBright, fontWeight: '600' }}>BT: {b.num_bt}</Text>
+                      ) : null}
                       {b.soc != null && (
                         <Text style={{ fontSize: 10, color: C.textMuted }}>SOC: {b.soc}%</Text>
                       )}
@@ -198,23 +201,42 @@ function BatteryCard({ item, onUnassign, onDelete }) {
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={{ fontSize: 32, fontWeight: '900', color, letterSpacing: -1 }}>
+        <Text style={{ flex: 0, fontSize: 32, fontWeight: '900', color, letterSpacing: -1 }}>
           {soc != null ? soc.toFixed(0) + '%' : 'NA'}
         </Text>
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>N° Serie :</Text>
-          <View style={{
-            flex: 1, backgroundColor: C.bgElevated, borderRadius: 8,
-            paddingHorizontal: 10, paddingVertical: 5,
-            borderWidth: 1, borderColor: C.border,
-          }}>
-            <Text style={{
-              fontSize: 11, color: C.accentBright,
-              fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+        <View style={{ flex: 1, gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>N° Serie :</Text>
+            <View style={{
+              flex: 1, backgroundColor: C.bgElevated, borderRadius: 8,
+              paddingHorizontal: 10, paddingVertical: 5,
+              borderWidth: 1, borderColor: C.border,
             }}>
-              {item.serial_number ?? '—'}
-            </Text>
+              <Text style={{
+                fontSize: 11, color: C.accentBright,
+                fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+              }}>
+                {item.serial_number ?? '—'}
+              </Text>
+            </View>
           </View>
+          {item.num_bt ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700' }}>N° BT :</Text>
+              <View style={{
+                flex: 1, backgroundColor: C.bgElevated, borderRadius: 8,
+                paddingHorizontal: 10, paddingVertical: 5,
+                borderWidth: 1, borderColor: C.border,
+              }}>
+                <Text style={{
+                  fontSize: 11, color: C.accentBright,
+                  fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+                }}>
+                  {item.num_bt}
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </View>
       </View>
     </View>

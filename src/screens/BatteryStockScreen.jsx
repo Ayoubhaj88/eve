@@ -11,9 +11,10 @@ import { C, battColor, alertOk, alertConfirm } from '../constants';
 
 function AddBatteryModal({ visible, onClose, onSaved }) {
   const [serial,  setSerial]  = useState('');
+  const [numBt,   setNumBt]   = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { if (visible) { setSerial(''); } }, [visible]);
+  useEffect(() => { if (visible) { setSerial(''); setNumBt(''); } }, [visible]);
 
   const save = async () => {
     if (!serial.trim()) { alertOk('Erreur', 'N° Série obligatoire.'); return; }
@@ -21,6 +22,7 @@ function AddBatteryModal({ visible, onClose, onSaved }) {
     try {
       const { error } = await supabase.from('batteries').insert({
         serial_number: serial.trim(),
+        num_bt: numBt.trim() || null,
         scooter_id: null,
         slot: null,
       });
@@ -48,6 +50,15 @@ function AddBatteryModal({ visible, onClose, onSaved }) {
           </Text>
           <TextInput value={serial} onChangeText={setSerial}
             placeholder="ex: RAF3G5" placeholderTextColor="rgba(255,255,255,0.4)"
+            autoCapitalize="characters"
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 16 }}
+          />
+
+          <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+            N° Bluetooth
+          </Text>
+          <TextInput value={numBt} onChangeText={setNumBt}
+            placeholder="ex: BT-00A1" placeholderTextColor="rgba(255,255,255,0.4)"
             autoCapitalize="characters"
             style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, color: C.white, fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 20 }}
           />
@@ -81,6 +92,11 @@ function StockCard({ item, onDelete }) {
         <Text style={{ fontSize: 14, fontWeight: '800', color: C.white }}>
           {item.serial_number}
         </Text>
+        {item.num_bt ? (
+          <Text style={{ fontSize: 10, color: C.accentBright, fontWeight: '600' }}>
+            BT: {item.num_bt}
+          </Text>
+        ) : null}
         {item.slot != null && (
           <Text style={{ fontSize: 10, color: C.textMuted }}>
             Slot: {item.slot}
@@ -131,7 +147,9 @@ export default function BatteryStockScreen({ navigation }) {
     const { data, error } = await supabase.from('batteries')
       .select('*')
       .order('serial_number', { ascending: true });
+    console.log('🔋 BatteryStock fetch:', { count: data?.length, error, first: data?.[0] });
     if (!error) setBatteries(data ?? []);
+    else console.error('❌ BatteryStock error:', error);
     setLoading(false);
   };
 
