@@ -172,7 +172,23 @@ function BatteryCard({ item, onUnassign, onDelete }) {
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
         <Text style={{ flex: 1, fontSize: 15, fontWeight: '900', color: C.white }}>{slotLabel}</Text>
-
+		
+		{item.bms_status ? (
+		  <View style={{
+			paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+			backgroundColor: item.bms_status === 'charging' ? C.accent
+						   : item.bms_status === 'in_use'   ? C.warning
+						   : C.success,
+			marginRight: 6,
+		  }}>
+			<Text style={{ fontSize: 11, fontWeight: '800', color: C.white }}>
+			  {item.bms_status === 'charging' ? 'En charge'
+			 : item.bms_status === 'in_use'   ? 'En utilisation'
+			 : 'En veille'}
+			</Text>
+		  </View>
+		) : null}
+		
         <View style={{
           paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20,
           backgroundColor: statusColor,
@@ -401,6 +417,31 @@ export default function DashboardScreen({ route, navigation }) {
             : (payload.fallen !== undefined ? !!payload.fallen : prev?.fallen);
           return { ...prev, fallen: newFallen, accel_x: ax, recorded_at: new Date().toISOString() };
         });
+      }
+	  if (payload.type === 'bms') {
+        const mac    = payload.battery_id;
+        const soc    = payload.soc;
+        const status = payload.status;
+
+        if (!mac || soc == null) return;
+
+        // Update UI instantly
+        setBatteries(prev =>
+          prev.map(b =>
+            b.num_bt === mac
+              ? { ...b, soc, bms_status: status }
+              : b
+          )
+        );
+
+        // Persist to Supabase
+        supabase
+          .from('batteries')
+          .update({ soc,bms_status: status  })
+          .eq('num_bt', mac)
+          .then(({ error }) => {
+            if (error) console.warn('BMS update error:', error.message);
+          });
       }
     } catch {}
   };
