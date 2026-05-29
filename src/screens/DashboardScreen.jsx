@@ -10,6 +10,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AttentionModal from '../components/AttentionModal';
 import { mqttManager } from '../lib/mqttManager';
 
+import { Image } from 'react-native';
+
+
 const MAX_BATTERIES = 3;
 const FALL_THRESHOLD = 55;
 
@@ -203,7 +206,10 @@ function BatteryCard({ item, onUnassign, onDelete }) {
             backgroundColor: C.bgElevated, justifyContent: 'center', alignItems: 'center',
             borderWidth: 1, borderColor: C.border, marginRight: 6,
           }}>
-          <Text style={{ fontSize: 16 }}>⚙️</Text>
+          <Image 
+			  source={require('../../assets/gear.png')} 
+			  style={{ width: 18, height: 18, resizeMode: 'contain', tintColor: '#00AAFF' }} 
+			/>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => onDelete(item)}
@@ -497,15 +503,16 @@ export default function DashboardScreen({ route, navigation }) {
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
-              onPress={deleteScooter}
-              style={{
-                width: 40, height: 40, borderRadius: 20,
-                backgroundColor: '#3A0A14',
-                justifyContent: 'center', alignItems: 'center',
-                borderWidth: 1, borderColor: C.danger + '55',
-              }}>
-              <Text style={{ fontSize: 18 }}>🗑️</Text>
-            </TouchableOpacity>
+			  onPress={deleteScooter}
+			  style={{
+				width: 40, height: 40, borderRadius: 20,
+				backgroundColor: '#3A0A14',
+				justifyContent: 'center', alignItems: 'center',
+				borderWidth: 1, borderColor: C.danger + '55',
+				overflow: 'hidden',
+			  }}>
+			  <Image source={require('../../assets/delete.png')} style={{ width: 20, height: 20, resizeMode: 'contain' }} />
+			</TouchableOpacity>
           </View>
         </View>
 
@@ -548,7 +555,7 @@ export default function DashboardScreen({ route, navigation }) {
                 borderWidth: 1.5,
                 borderColor: active ? C.danger + '55' : C.success + '55',
               }}>
-                <Text style={{ fontSize: 22 }}>{active ? '⚠️' : '✅'}</Text>
+                <Image source={require('../../assets/sabotage.png')} style={{ width: 32, height: 32 }} />
                 <Text style={{ fontSize: 11, fontWeight: '700', color: active ? C.danger : C.success }}>
                   {label}
                 </Text>
@@ -564,11 +571,11 @@ export default function DashboardScreen({ route, navigation }) {
         <SectionTitle title="Controle R.C" />
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {[
-            { label: 'Verrouiller',   emoji: '🔒', action: 'lock',    confirm: "Verrouiller le scooter"    },
-            { label: 'Déverrouiller', emoji: '🔓', action: 'unlock',  confirm: "Déverrouiller le scooter"  },
-            { label: 'Klaxon',        emoji: '🔔', action: 'bell',    confirm: "Activer le klaxon"         },
-            { label: 'Tonnerre',      emoji: '⚡', action: 'thunder', confirm: "Activer le tonnerre"       },
-          ].map(({ label, emoji, action, confirm }) => (
+            { label: 'Verrouiller',   icon: require('../../assets/lock.png'),    action: 'lock',    confirm: "Verrouiller le scooter"    },
+			{ label: 'Déverrouiller', icon: require('../../assets/unlock.png'),  action: 'unlock',  confirm: "Déverrouiller le scooter"  },
+			{ label: 'Klaxon',        icon: require('../../assets/bell.png'),    action: 'bell',    confirm: "Activer le klaxon"         },
+			{ label: 'Tonnerre',      icon: require('../../assets/thunder.png'), action: 'thunder', confirm: "Activer le tonnerre"       },
+          ].map(({ label, icon, action, confirm }) => (
             <TouchableOpacity key={action}
               onPress={() => sendRfCommand(action, confirm)}
               style={{
@@ -576,7 +583,7 @@ export default function DashboardScreen({ route, navigation }) {
                 paddingVertical: 12, paddingHorizontal: 4, alignItems: 'center', gap: 6,
                 borderWidth: 1, borderColor: C.border,
               }}>
-              <Text style={{ fontSize: 22 }}>{emoji}</Text>
+              <Image source={icon} style={{ width: 28, height: 28 }} />
               <Text style={{ fontSize: 11, fontWeight: '700', color: C.white, textAlign: 'center' }} numberOfLines={2}>
                 {label}
               </Text>
@@ -614,7 +621,7 @@ export default function DashboardScreen({ route, navigation }) {
           borderWidth: 1, borderColor: C.border,
           padding: 14, alignItems: 'center', gap: 4,
         }}>
-          <Text style={{ fontSize: 22 }}>🚫</Text>
+          <Image source={require('../../assets/NA.png')} style={{ width: 22, height: 22, resizeMode: 'contain' }} />
           <Text style={{ fontSize: 13, fontWeight: '800', color: C.textSecondary }}>
             Indisponible
           </Text>
