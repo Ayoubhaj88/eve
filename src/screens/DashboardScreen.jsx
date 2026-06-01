@@ -324,7 +324,12 @@ export default function DashboardScreen({ route, navigation }) {
       const { data } = await supabase.from('telemetry').select('*')
         .eq('scooter_id', scooter.id).order('recorded_at', { ascending: false })
         .limit(1).maybeSingle();
-      if (data) setTelemetry(data);
+      if (data) {
+		  setTelemetry(prev => ({
+			...data,
+			tamper_points: prev?.tamper_points ?? data.tamper_points,
+		  }));
+		}
     } finally {
       fetchingTelRef.current = false;
     }
@@ -401,17 +406,13 @@ export default function DashboardScreen({ route, navigation }) {
       }
 
       if (payload.type === 'contact') {
-        setTelemetry(prev => {
-          const prevTamper = prev?.tamper_points ?? [false, false, false];
-          const updatedTamper = Array.isArray(payload.tamper_points)
-            ? payload.tamper_points
-            : [...prevTamper];
-          if (!Array.isArray(payload.tamper_points)) {
-            updatedTamper[0] = payload.value === 1;
-          }
-          return { ...prev, tamper_points: updatedTamper, recorded_at: new Date().toISOString() };
-        });
-      }
+		  setTelemetry(prev => {
+			const updatedTamper = [...(prev?.tamper_points ?? [false, false, false])];
+			const idx = payload.index ?? 0;
+			updatedTamper[idx] = payload.value === 1;
+			return { ...prev, tamper_points: updatedTamper, recorded_at: new Date().toISOString() };
+		  });
+		}
 
       if (payload.type === 'gyro' || payload.fallen !== undefined
           || payload.accel !== undefined || payload.accel_x !== undefined) {
