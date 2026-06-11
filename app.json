@@ -5,7 +5,8 @@
     "owner": "pastis1",
     "android": {
       "package": "com.pastis1.test",
-      "googleServicesFile": "./android/app/google-services.json"
+      "googleServicesFile": "./google-services.json"
+
     },
     "plugins": [
       "@react-native-firebase/app",
