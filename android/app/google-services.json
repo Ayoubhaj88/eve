@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "879214996802",
+    "project_id": "eve-mobility",
+    "storage_bucket": "eve-mobility.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:879214996802:android:f46d462ff5409ff0ea2cdb",
+        "android_client_info": {
+          "package_name": "com.pastis1.test"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyunsoTTMaH1HrVlP1lfHEQhAQzvQntYo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
