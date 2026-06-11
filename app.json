@@ -1,13 +1,20 @@
 {
   "expo": {
+    "name": "eve-mobility",
+    "slug": "scooter-monitor",
+    "owner": "pastis1",
+    "android": {
+      "package": "com.pastis1.test",
+      "googleServicesFile": "./android/app/google-services.json"
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging"
+    ],
     "extra": {
       "eas": {
         "projectId": "59fbf6b1-3668-47ad-8e0b-9de2e8dfd4d4"
       }
-    },
-    "owner": "pastis1",
-    "android": {
-      "package": "com.pastis1.test"
     }
   }
 }
